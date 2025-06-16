@@ -18,22 +18,22 @@ Langchain Memvid is a powerful tool that combines the capabilities of Langchain 
 ## Installation
 
 ```bash
-pip install langchain_memvid
+pip install langchain-memvid
 ```
 
 Optional dependencies:
 ```bash
 # For testing
-pip install langchain_memvid[test]
+pip install langchain-memvid[test]
 
 # For PDF support
-pip install langchain_memvid[pdf]
+pip install langchain-memvid[pdf]
 
 # For EPUB support
-pip install langchain_memvid[epub]
+pip install langchain-memvid[epub]
 
 # For all features
-pip install langchain_memvid[all]
+pip install langchain-memvid[all]
 ```
 
 ## Quick Start
