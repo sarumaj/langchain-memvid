@@ -47,7 +47,8 @@ all = [
     "opencv-python==4.11.0.86",
     "pypdf==5.6.0",
     "beautifulsoup4==4.13.4",
-    "ebooklib==0.18"
+    "ebooklib==0.18",
+    "pytest==8.0.0"
 ]
 
 [tool.setuptools.packages.find]
