@@ -1,3 +1,10 @@
+"""
+VectorStore implementation for Memvid.
+
+This implementation is a wrapper around the Memvid vector store.
+It uses the Memvid encoder to encode documents into QR codes and the Memvid retriever to search for similar documents.
+"""
+
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
