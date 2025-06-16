@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langchain_memvid"
+version = "0.0.0"
+description = "Langchain implementation for Memvid"
+requires-python = ">=3.12"
+authors = [
+    { name="Dawid Ciepiela", email="71898979+sarumaj@users.noreply.github.com" }
+]
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "faiss-cpu==1.11.0",
+    "langchain-core==0.3.58",
+    "nest_asyncio==1.6.0",
+    "qrcode[pil]==8.2",
+    "opencv-contrib-python==4.11.0.86",
+    "opencv-python==4.11.0.86",
+    "orjson==3.10.18",
+    "pydantic==2.11.7",
+    "msgpack==1.1.1",
+    "msgpack-numpy==0.4.8",
+    "tqdm==4.67.1"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==8.0.0"
+]
+pdf = [
+    "pypdf==5.6.0"
+]
+epub = [
+    "beautifulsoup4==4.13.4",
+    "ebooklib==0.18"
+]
+all = [
+    "opencv-contrib-python==4.11.0.86",
+    "opencv-python==4.11.0.86",
+    "pypdf==5.6.0",
+    "beautifulsoup4==4.13.4",
+    "ebooklib==0.18"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*", "nb*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = ["-v"]
