@@ -1,3 +1,9 @@
+[![release](https://github.com/sarumaj/langchain-memvid/actions/workflows/release.yml/badge.svg)](https://github.com/sarumaj/langchain-memvid/actions/workflows/release.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/sarumaj/langchain-memvid?logo=github)](https://github.com/sarumaj/langchain-memvid/releases/latest)
+[![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/sarumaj/langchain-memvid)](https://github.com/sarumaj/langchain-memvid/blob/main/pyproject.toml)
+
+---
+
 # Langchain Memvid
 
 A Langchain implementation for Memvid, enabling efficient video-based document storage and retrieval using vector embeddings.
