@@ -22,6 +22,7 @@ LICENSE_URLS = {
     "nest_asyncio": "https://raw.githubusercontent.com/erdewit/nest_asyncio/master/LICENSE",
     "pytest": "https://raw.githubusercontent.com/pytest-dev/pytest/main/LICENSE",
     "beautifulsoup4": "https://raw.githubusercontent.com/akalongman/python-beautifulsoup/master/LICENSE",
+    "memvid": "https://raw.githubusercontent.com/Olow304/memvid/refs/heads/main/LICENSE"
 }
 
 
