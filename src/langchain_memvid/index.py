@@ -38,9 +38,10 @@ from pydantic import BaseModel, Field
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 import msgpack
-import msgpack_numpy as m
-m.patch()  # Enable numpy array serialization
+import msgpack_numpy
 
+
+msgpack_numpy.patch()  # Enable numpy array serialization
 logger = logging.getLogger(__name__)
 
 

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from dataclasses import dataclass, asdict
 from concurrent.futures import ThreadPoolExecutor
 import time
+from io import StringIO
 
 from .utils import encode_to_qr, chunk_text
 from .config import CODEC_PARAMETERS
@@ -135,9 +136,7 @@ class Encoder:
         """
         chunk_size = chunk_size or self.config.chunk_size
         overlap = overlap or self.config.overlap
-
-        chunks = chunk_text(text, chunk_size, overlap)
-        self.add_chunks(chunks)
+        self.add_chunks(chunk_text(text, chunk_size, overlap))
 
     def add_pdf(self, pdf_path: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None):
         """
@@ -155,27 +154,27 @@ class Encoder:
 
         chunk_size = chunk_size or self.config.chunk_size
         overlap = overlap or self.config.overlap
+        file_path = Path(pdf_path)
 
-        if not Path(pdf_path).exists():
+        if not file_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-        text = ""
+        buffer = StringIO()
         with open(pdf_path, 'rb') as file:
             pdf_reader = pypdf.PdfReader(file)
-            num_pages = len(pdf_reader.pages)
 
-            logger.info(f"Extracting text from {num_pages} pages of {Path(pdf_path).name}")
+            logger.info(f"Extracting text from {len(pdf_reader.pages)} pages of {file_path.name}")
+            for page in pdf_reader.pages:
+                buffer.write(page.extract_text())
+                buffer.write("\n\n")
 
-            for page_num in range(num_pages):
-                page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
-                text += page_text + "\n\n"
-
-        if text.strip():
+        if text := buffer.getvalue().strip():
             self.add_text(text, chunk_size, overlap)
-            logger.info(f"Added PDF content: {len(text)} characters from {Path(pdf_path).name}")
+            logger.info(f"Added PDF content: {len(text)} characters from {file_path.name}")
         else:
             logger.warning(f"No text extracted from PDF: {pdf_path}")
+
+        buffer.close()
 
     def add_epub(self, epub_path: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None):
         """
@@ -197,19 +196,19 @@ class Encoder:
 
         chunk_size = chunk_size or self.config.chunk_size
         overlap = overlap or self.config.overlap
+        file_path = Path(epub_path)
 
-        if not Path(epub_path).exists():
+        if not file_path.exists():
             raise FileNotFoundError(f"EPUB file not found: {epub_path}")
 
         try:
             book = epub.read_epub(epub_path)
-            text_content = []
-
-            logger.info(f"Extracting text from EPUB: {Path(epub_path).name}")
+            logger.info(f"Extracting text from EPUB: {file_path.name}")
+            buffer = StringIO()
 
             # Extract text from all document items
             for item in book.get_items():
-                if item.get_type() == ebooklib_ITEM_DOCUMENT:
+                if item.get_type() in (ebooklib_ITEM_DOCUMENT,):  # ITEM_DOCUMENT: 9 is the type for HTML content
                     # Parse HTML content
                     soup = BeautifulSoup(item.get_content(), 'html.parser')
 
@@ -225,17 +224,18 @@ class Encoder:
                     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
                     text = ' '.join(chunk for chunk in chunks if chunk)
 
-                    if text.strip():
-                        text_content.append(text)
+                    if text := text.strip():
+                        buffer.write(text)
+                        buffer.write("\n\n")
 
             # Combine all text
-            full_text = "\n\n".join(text_content)
-
-            if full_text.strip():
+            if full_text := buffer.getvalue().strip():
                 self.add_text(full_text, chunk_size, overlap)
                 logger.info(f"Added EPUB content: {len(full_text)} characters from {Path(epub_path).name}")
             else:
                 logger.warning(f"No text extracted from EPUB: {epub_path}")
+
+            buffer.close()
 
         except Exception as e:
             logger.error(f"Error processing EPUB {epub_path}: {e}")
@@ -256,18 +256,16 @@ class Encoder:
             codec = self.config.codec
 
         if codec not in CODEC_PARAMETERS.keys():
-            raise ValueError(f"Unsupported codec: {codec}")
+            raise ValueError(f"Unsupported codec: {codec}, allowed codecs: {list(CODEC_PARAMETERS.keys())}")
 
         codec_config = CODEC_PARAMETERS[codec]
 
         # OpenCV codec mapping
-        opencv_codec_map = {
+        opencv_codec = {
             "mp4v": "mp4v",
             "xvid": "XVID",
             "mjpg": "MJPG"
-        }
-
-        opencv_codec = opencv_codec_map.get(codec, codec)
+        }.get(codec, codec)
         fourcc = cv2.VideoWriter_fourcc(*opencv_codec)
 
         return cv2.VideoWriter(
