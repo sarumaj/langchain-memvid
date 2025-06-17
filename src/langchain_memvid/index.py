@@ -10,7 +10,7 @@ import numpy as np
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-import json
+import orjson
 import logging
 
 from .exceptions import MemVidIndexError
@@ -299,8 +299,8 @@ class IndexManager:
             faiss.write_index(self._index, str(path / "index.faiss"))
 
             # Save metadata
-            with open(path / "metadata.json", "w") as f:
-                json.dump(self._metadata, f)
+            with open(path / "metadata.json", "wb") as f:
+                f.write(orjson.dumps(self._metadata, option=orjson.OPT_NON_STR_KEYS))
 
             logger.info(f"Saved index to {path}")
 
@@ -322,8 +322,8 @@ class IndexManager:
             self._dimension = self._index.d
 
             # Load metadata
-            with open(path / "metadata.json", "r") as f:
-                self._metadata = json.load(f)
+            with open(path / "metadata.json", "rb") as f:
+                self._metadata = orjson.loads(f.read())
 
             logger.info(f"Loaded index from {path}")
 

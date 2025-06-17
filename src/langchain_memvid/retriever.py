@@ -7,7 +7,7 @@ using semantic search and QR code decoding.
 
 from pathlib import Path
 from typing import List, Any, Optional, Dict, Union
-import json
+import orjson
 import logging
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
@@ -313,7 +313,7 @@ class Retriever(BaseRetriever, BaseModel):
                 return None
 
             # Parse QR code data
-            chunk_data = json.loads(qr_data[0])
+            chunk_data = orjson.loads(qr_data[0])
             return Document(
                 page_content=chunk_data["text"],
                 metadata=chunk_data["metadata"]
@@ -350,13 +350,13 @@ class Retriever(BaseRetriever, BaseModel):
                 # Parse QR code data
                 for data in qr_data:
                     try:
-                        chunk_data = json.loads(data)
+                        chunk_data = orjson.loads(data)
                         doc = Document(
                             page_content=chunk_data["text"],
                             metadata=chunk_data["metadata"]
                         )
                         documents.append(doc)
-                    except json.JSONDecodeError:
+                    except orjson.JSONDecodeError:
                         continue
 
             return documents

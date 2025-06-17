@@ -5,7 +5,7 @@ This module provides functionality for encoding text chunks into QR codes
 and managing the encoding process.
 """
 
-import json
+import orjson
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -142,7 +142,7 @@ class Encoder:
             qr_frames = []
             for chunk in self._chunks:
                 # Convert chunk to JSON string
-                chunk_data = json.dumps(chunk)
+                chunk_data = orjson.dumps(chunk, option=orjson.OPT_NON_STR_KEYS).decode()
                 # Create QR code
                 qr_frame = self.video_processor.create_qr_code(chunk_data)
                 qr_frames.append(qr_frame)
