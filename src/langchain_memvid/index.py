@@ -1,624 +1,331 @@
 """
-Index management for embeddings and vector search.
+Vector index management for MemVid.
 
-This module provides functionality for managing embeddings, FAISS index, and metadata
-for fast retrieval of text chunks from video frames. It supports both Flat and IVF
-index types, with automatic training and fallback mechanisms.
-
-Example:
-    ```python
-    from langchain_memvid.index import IndexManager, IndexConfig
-    from langchain.embeddings import HuggingFaceEmbeddings
-
-    # Initialize
-    config = IndexConfig(index_type="Flat")
-    embeddings = HuggingFaceEmbeddings()
-    index_manager = IndexManager(config=config, embeddings=embeddings)
-
-    # Add chunks
-    chunks = ["text chunk 1", "text chunk 2"]
-    frame_numbers = [1, 2]
-    chunk_ids = index_manager.add_chunks(chunks, frame_numbers)
-
-    # Search
-    results = index_manager.search("query", top_k=5)
-    ```
-
-Original source: https://github.com/Olow304/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/index.py
+This module provides functionality for managing vector indices used in MemVid,
+including FAISS index creation, updating, and searching.
 """
 
-import orjson as json
-import numpy as np
 import faiss
-from langchain_core.embeddings import Embeddings
-from typing import List, Dict, Tuple, Optional, Literal, TypedDict, Set, Union, Any
-import logging
+import numpy as np
 from pathlib import Path
-from pydantic import BaseModel, Field
-from dataclasses import dataclass, asdict
-from collections import defaultdict
-import msgpack
-import msgpack_numpy
+from typing import List, Optional, Dict, Any
+from dataclasses import dataclass
+import json
+import logging
 
+from .exceptions import MemVidIndexError
+from .config import IndexConfig
 
-msgpack_numpy.patch()  # Enable numpy array serialization
 logger = logging.getLogger(__name__)
 
 
-class IndexConfig(BaseModel):
-    """Configuration for FAISS index.
-
-    Attributes:
-        index_type: Type of index to use. "Flat" for exact search, "IVF" for approximate search.
-        nlist: Number of clusters for IVF index. Only used when index_type is "IVF".
-        serialization_format: Format to use for metadata serialization ('json' or 'msgpack').
-    """
-    index_type: Literal["Flat", "IVF"] = Field(
-        default="Flat",
-        description="Can be \"IVF\" for larger datasets, otherwise use Flat"
-    )
-    nlist: int = Field(default=100, description="Number of clusters for IVF index")
-    serialization_format: Literal["json", "msgpack"] = Field(
-        default="msgpack",
-        description="Format to use for metadata serialization"
-    )
-
-
-class ChunkMetadata(TypedDict):
-    """Metadata for a text chunk.
-
-    Attributes:
-        id: Unique identifier for the chunk.
-        text: The actual text content of the chunk.
-        frame: Frame number this chunk belongs to.
-        length: Length of the text chunk in characters.
-    """
-    id: int
-    text: str
-    frame: int
-    length: int
-
-
 @dataclass
-class IndexStats:
-    """Statistics about the index.
+class SearchResult:
+    """Represents a search result with metadata and similarity score."""
+    text: str
+    source: Optional[str] = None
+    category: Optional[str] = None
+    similarity: float = 0.0
+    metadata: Optional[Dict[str, Any]] = None
 
-    Attributes:
-        total_chunks: Total number of chunks in the index.
-        total_frames: Total number of frames with chunks.
-        index_type: Type of FAISS index being used.
-        embedding_model: Name of the embedding model.
-        dimension: Dimension of the embeddings.
-        avg_chunks_per_frame: Average number of chunks per frame.
-    """
-    total_chunks: int
-    total_frames: int
-    index_type: str
-    embedding_model: str
-    dimension: int
-    avg_chunks_per_frame: float
-    config: Dict[str, Any]
+    @classmethod
+    def from_metadata(cls, metadata: Dict[str, Any], similarity: float) -> 'SearchResult':
+        """Create a SearchResult from metadata dictionary and similarity score."""
+        # Create a copy of metadata to avoid modifying the original
+        metadata = metadata.copy()
 
-    def dict(self) -> Dict[str, Any]:
-        """Convert IndexStats to a dictionary."""
-        return asdict(self)
+        # Extract text from the main metadata or nested metadata
+        text = metadata.get('text', '')
+        if not text and 'metadata' in metadata:
+            text = metadata['metadata'].get('text', '')
+
+        # Create a clean metadata dict without nested structures
+        clean_metadata = {}
+        for key, value in metadata.items():
+            if key != 'metadata':  # Skip nested metadata
+                clean_metadata[key] = value
+            elif isinstance(value, dict):  # If we have nested metadata, merge it
+                clean_metadata.update(value)
+
+        return cls(
+            text=text,
+            source=clean_metadata.get('source'),
+            category=clean_metadata.get('category'),
+            similarity=similarity,
+            metadata=clean_metadata
+        )
 
 
 class IndexManager:
-    """Manages embeddings, FAISS index, and metadata for fast retrieval.
+    """Manages vector indices for MemVid."""
 
-    This class handles the creation and management of FAISS indices for efficient
-    similarity search of text chunks. It supports both exact (Flat) and approximate
-    (IVF) search methods, with automatic training and fallback mechanisms.
-
-    Attributes:
-        config: Index configuration.
-        embedding_model: LangChain embedding model for generating embeddings.
-        index: FAISS index for similarity search.
-        metadata: Dictionary mapping chunk IDs to their metadata.
-        frame_to_chunks: Dictionary mapping frame numbers to sets of chunk IDs.
-        _index_path: Optional path to the index file for lazy loading (as string).
-        _is_loaded: Whether the index has been loaded.
-    """
-
-    def __init__(self, *, config: IndexConfig, embeddings: Embeddings):
-        """Initialize IndexManager.
+    def __init__(
+        self,
+        config: IndexConfig,
+        embeddings: Any,
+    ):
+        """Initialize the index manager.
 
         Args:
-            config: Index configuration specifying index type and parameters.
-            embeddings: LangChain embedding model to use for generating embeddings.
-
-        Raises:
-            ValueError: If embedding dimension cannot be determined.
+            config: Configuration for the index
+            embeddings: LangChain embeddings interface
         """
         self.config = config
-        self.embedding_model = embeddings
+        self.embeddings = embeddings
+        self._index: Optional[faiss.Index] = None
+        self._metadata: List[Dict[str, Any]] = []
+        self._is_trained: bool = False
         self._dimension: Optional[int] = None
-        self._index_path: Optional[str] = None
-        self._is_loaded = False
+        self._min_points: Optional[int] = None
 
-        # Initialize empty containers
-        self.index: Optional[faiss.Index] = None
-        self.metadata: Dict[int, ChunkMetadata] = {}
-        self.frame_to_chunks: Dict[int, Set[int]] = defaultdict(set)
+    def create_index(self) -> None:
+        """Create a new FAISS index.
 
-    @property
-    def dimension(self) -> int:
-        """Get the embedding dimension, initializing it if needed.
-
-        Returns:
-            int: The dimension of the embeddings.
+        The dimension is automatically determined from the embeddings model.
+        If using IVF index and there aren't enough points for training,
+        falls back to a flat index.
 
         Raises:
-            ValueError: If embedding dimension cannot be determined.
-        """
-        if self._dimension is None:
-            try:
-                # Try to get dimension from model attributes first
-                if hasattr(self.embedding_model, "embedding_dimension"):
-                    self._dimension = self.embedding_model.embedding_dimension
-                elif hasattr(self.embedding_model, "dimensions"):
-                    self._dimension = self.embedding_model.dimensions
-                else:
-                    # Fallback to test embedding
-                    test_embedding = self.embedding_model.embed_query("test")
-                    self._dimension = len(test_embedding)
-
-                logger.info(f"Initialized embedding dimension: {self._dimension}")
-            except Exception as e:
-                logger.error(f"Failed to determine embedding dimension: {e}")
-                raise ValueError(
-                    "Could not determine embedding dimension. "
-                    "Please ensure the embedding model is properly initialized."
-                ) from e
-
-        return self._dimension
-
-    def _ensure_loaded(self) -> None:
-        """Ensure the index is loaded before performing operations.
-
-        This method implements lazy loading - the index is only loaded when needed.
-        """
-        if not self._is_loaded:
-            if self._index_path is not None:
-                self.load(self._index_path)
-            else:
-                # Create new index if no path is set
-                self.index = self._create_index()
-                self._is_loaded = True
-
-    def _create_index(self) -> faiss.Index:
-        """Create FAISS index based on configuration.
-
-        Returns:
-            faiss.Index: Initialized FAISS index with ID mapping.
-
-        Raises:
-            ValueError: If index type is invalid.
-        """
-        dim = self.dimension
-
-        match self.config.index_type:
-            case "Flat":
-                index = faiss.IndexFlatL2(dim)
-
-            case "IVF":
-                # Create a quantizer first
-                quantizer = faiss.IndexFlatL2(dim)
-                # Create IVF index with the quantizer
-                index = faiss.IndexIVFFlat(quantizer, dim, self.config.nlist)
-
-            case _:
-                raise ValueError(f"Invalid index type: {self.config.index_type}")
-
-        return faiss.IndexIDMap(index)
-
-    def add_chunks(
-        self,
-        chunks: List[Union[str, Any]],
-        frame_numbers: List[int],
-        show_progress: bool = True,
-    ) -> List[int]:
-        """Add chunks to index with robust error handling and validation.
-
-        This method processes text chunks, generates embeddings, and adds them to the
-        FAISS index. It includes validation, error handling, and batch processing
-        capabilities.
-
-        Args:
-            chunks: List of text chunks to add.
-            frame_numbers: Corresponding frame numbers for each chunk.
-            show_progress: Whether to show progress bar during processing.
-
-        Returns:
-            List[int]: List of successfully added chunk IDs.
-
-        Raises:
-            ValueError: If number of chunks doesn't match number of frame numbers.
-        """
-        self._ensure_loaded()
-        if len(chunks) != len(frame_numbers):
-            raise ValueError("Number of chunks must match number of frame numbers")
-
-        logger.info(f"Processing {len(chunks)} chunks for indexing...")
-
-        # Phase 1: Validate and filter chunks
-        valid_chunks = []
-        valid_frames = []
-        skipped_count = 0
-
-        for chunk, frame_num in zip(chunks, frame_numbers):
-            if self._is_valid_chunk(chunk):
-                valid_chunks.append(chunk)
-                valid_frames.append(frame_num)
-            else:
-                skipped_count += 1
-                chunk_length = len(str(chunk)) if chunk is not None else 0
-                logger.warning(f"Skipping invalid chunk at frame {frame_num}: length={chunk_length}")
-
-        if skipped_count > 0:
-            logger.warning(f"Skipped {skipped_count} invalid chunks out of {len(chunks)} total")
-
-        if not valid_chunks:
-            logger.error("No valid chunks to process")
-            return []
-
-        logger.info(f"Processing {len(valid_chunks)} valid chunks")
-
-        # Phase 2: Generate embeddings
-        try:
-            embeddings = self._generate_embeddings(valid_chunks, show_progress)
-        except Exception as e:
-            logger.error(f"Failed to generate embeddings: {e}")
-            return []
-
-        if embeddings is None or len(embeddings) == 0:
-            logger.error("No embeddings generated")
-            return []
-
-        # Phase 3: Add to FAISS index
-        try:
-            chunk_ids = self._add_to_index(embeddings, valid_chunks, valid_frames)
-            logger.info(f"Successfully added {len(chunk_ids)} chunks to index")
-            return chunk_ids
-        except Exception as e:
-            logger.error(f"Failed to add chunks to index: {e}")
-            return []
-
-    def _is_valid_chunk(self, chunk: Union[str, Any]) -> bool:
-        """Validate chunk for processing.
-
-        Args:
-            chunk: Text chunk to validate.
-
-        Returns:
-            bool: True if chunk is valid, False otherwise.
-        """
-        if not isinstance(chunk, str):
-            return False
-
-        chunk = chunk.strip()
-        if not chunk or len(chunk) > 8192:  # SentenceTransformer limit
-            return False
-
-        try:
-            chunk.encode('utf-8')
-            return True
-        except UnicodeEncodeError:
-            return False
-
-    def _generate_embeddings(self, chunks: List[str], show_progress: bool) -> np.ndarray:
-        """Generate embeddings with error handling and batch processing.
-
-        Args:
-            chunks: List of text chunks to embed.
-            show_progress: Whether to show progress bar.
-
-        Returns:
-            np.ndarray: Array of embeddings with shape (n_chunks, dimension).
-
-        Raises:
-            RuntimeError: If no embeddings could be generated.
+            MemVidIndexError: If index creation fails
         """
         try:
-            logger.info(f"Generating embeddings for {len(chunks)} chunks (full batch)")
-            embeddings = self.embedding_model.embed_documents(chunks)
-            return np.array(embeddings).astype('float32')
-        except Exception as e:
-            logger.warning(f"Full batch embedding failed: {e}. Trying batch processing...")
-            return self._generate_embeddings_batched(chunks, show_progress)
+            # Get dimension from embeddings
+            test_vector = self.embeddings.embed_query("test")
+            self._dimension = len(test_vector)
 
-    def _generate_embeddings_batched(self, chunks: List[str], show_progress: bool) -> np.ndarray:
-        """Generate embeddings in smaller batches with individual error handling.
+            if self.config.index_type == "faiss":
+                match self.config.metric:
+                    case "cosine":
+                        self._index = faiss.IndexFlatIP(self._dimension)
+                    case "l2":
+                        self._index = faiss.IndexFlatL2(self._dimension)
+                    case _:
+                        raise MemVidIndexError(f"Unsupported metric: {self.config.metric}")
 
-        Args:
-            chunks: List of text chunks to embed.
-            show_progress: Whether to show progress bar.
+                # If using IVF index
+                if self.config.nlist > 0:
+                    # FAISS requires at least 30 * nlist points for training
+                    self._min_points = 30 * self.config.nlist
 
-        Returns:
-            np.ndarray: Array of embeddings with shape (n_chunks, dimension).
-
-        Raises:
-            RuntimeError: If no embeddings could be generated.
-        """
-        all_embeddings = []
-        valid_chunks = []
-        batch_size = 100
-
-        total_batches = (len(chunks) + batch_size - 1) // batch_size
-
-        if show_progress:
-            from tqdm import tqdm
-            batch_iter = tqdm(
-                range(0, len(chunks), batch_size),
-                desc="Processing chunks in batches",
-                total=total_batches
-            )
-        else:
-            batch_iter = range(0, len(chunks), batch_size)
-
-        for i in batch_iter:
-            batch_chunks = chunks[i:i + batch_size]
-            try:
-                batch_embeddings = self.embedding_model.embed_documents(batch_chunks)
-                all_embeddings.extend(batch_embeddings)
-                valid_chunks.extend(batch_chunks)
-            except Exception as e:
-                logger.warning(f"Batch {i//batch_size} failed: {e}. Processing individually...")
-                for chunk in batch_chunks:
-                    try:
-                        embedding = self.embedding_model.embed_documents([chunk])
-                        all_embeddings.extend(embedding)
-                        valid_chunks.append(chunk)
-                    except Exception as chunk_error:
-                        logger.error(f"Failed to embed individual chunk (length={len(chunk)}): {chunk_error}")
-                        continue
-
-        if not all_embeddings:
-            raise RuntimeError("No embeddings could be generated")
-
-        logger.info(f"Generated embeddings for {len(valid_chunks)} out of {len(chunks)} chunks")
-        return np.array(all_embeddings).astype('float32')
-
-    def _add_to_index(self, embeddings: np.ndarray, chunks: List[str], frame_numbers: List[int]) -> List[int]:
-        """Add embeddings to FAISS index with error handling.
-
-        Args:
-            embeddings: Array of embeddings to add.
-            chunks: List of text chunks corresponding to embeddings.
-            frame_numbers: List of frame numbers corresponding to chunks.
-
-        Returns:
-            List[int]: List of assigned chunk IDs.
-
-        Raises:
-            Exception: If adding to index fails.
-        """
-        if len(embeddings) != len(chunks) or len(embeddings) != len(frame_numbers):
-            min_len = min(len(embeddings), len(chunks), len(frame_numbers))
-            embeddings = embeddings[:min_len]
-            chunks = chunks[:min_len]
-            frame_numbers = frame_numbers[:min_len]
-            logger.warning(f"Trimmed to {min_len} items due to length mismatch")
-
-        # Assign IDs
-        start_id = len(self.metadata)
-        chunk_ids = list(range(start_id, start_id + len(chunks)))
-
-        # Train index if needed (for IVF)
-        self._train_index_if_needed(embeddings)
-
-        # Add to index
-        try:
-            self.index.add_with_ids(embeddings, np.array(chunk_ids, dtype=np.int64))
-        except Exception as e:
-            logger.error(f"Failed to add embeddings to FAISS index: {e}")
-            raise
-
-        # Store metadata
-        for chunk, frame_num, chunk_id in zip(chunks, frame_numbers, chunk_ids):
-            try:
-                metadata: ChunkMetadata = {
-                    "id": chunk_id,
-                    "text": chunk,
-                    "frame": frame_num,
-                    "length": len(chunk)
-                }
-                self.metadata[chunk_id] = metadata
-                self.frame_to_chunks[frame_num].add(chunk_id)
-            except Exception as e:
-                logger.error(f"Failed to store metadata for chunk {chunk_id}: {e}")
-                continue
-
-        return chunk_ids
-
-    def _train_index_if_needed(self, embeddings: np.ndarray) -> None:
-        """Train the index if needed (for IVF).
-
-        This method handles the training of IVF indexes, including automatic
-        fallback to Flat index if training data is insufficient.
-
-        Args:
-            embeddings: Array of embeddings to use for training.
-        """
-        try:
-            underlying_index = self.index.index
-
-            if isinstance(underlying_index, faiss.IndexIVFFlat):
-                nlist = underlying_index.nlist
-
-                if not underlying_index.is_trained:
-                    if len(embeddings) < nlist:
+                    # Use flat index if minimum points is too high
+                    if self._min_points > 1000:
                         logger.warning(
-                            f"Insufficient training data: need at least {nlist} embeddings, "
-                            f"got {len(embeddings)}"
+                            f"Minimum points required ({self._min_points}) is too high. "
+                            "Falling back to flat index."
                         )
-                        logger.info("Auto-switching to IndexFlatL2 for reliable operation")
-                        self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
+                        self._is_trained = True
                     else:
-                        recommended_min = nlist * 10
-                        if len(embeddings) < recommended_min:
-                            logger.warning(
-                                f"Suboptimal training data: {len(embeddings)} embeddings "
-                                f"(recommended: {recommended_min}+)"
-                            )
-
-                        training_data = embeddings[:min(50000, len(embeddings))]
-                        underlying_index.train(training_data)
-                        logger.info("FAISS IVF training completed successfully")
+                        # We'll convert to IVF when we have enough points
+                        self._is_trained = True
                 else:
-                    logger.info(f"FAISS IVF index already trained (nlist={nlist})")
-            else:
-                logger.info(f"Using {type(underlying_index).__name__} (no training required)")
+                    self._is_trained = True
+
+            logger.info(f"Created {self.config.index_type} index with {self.config.metric} metric")
 
         except Exception as e:
-            logger.error(f"Index training failed: {e}")
-            logger.info("Falling back to IndexFlatL2 for reliability")
-            self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
+            raise MemVidIndexError(f"Failed to create index: {str(e)}")
 
-    def search(self, query: str, top_k: int = 5) -> List[Tuple[int, float, ChunkMetadata]]:
-        """Search for similar chunks.
+    def add_texts(
+        self,
+        texts: List[str],
+        metadata: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        """Add texts to the index by converting them to vectors using embeddings.
 
         Args:
-            query: Search query text.
-            top_k: Number of results to return.
+            texts: List of texts to add
+            metadata: Optional list of metadata dictionaries for each text
+
+        Raises:
+            MemVidIndexError: If adding texts fails
+        """
+        try:
+            if self._index is None:
+                self.create_index()
+
+            # Convert texts to vectors using embeddings
+            vectors = np.array(self.embeddings.embed_documents(texts), dtype='float32')
+
+            # Use empty metadata if none provided
+            if metadata is None:
+                metadata = [{"text": text} for text in texts]
+            else:
+                # Ensure each metadata dict has the original text
+                for i, text in enumerate(texts):
+                    if "text" not in metadata[i]:
+                        metadata[i]["text"] = text
+
+            # Create a mapping of text to index for deduplication
+            text_to_idx = {m["text"]: i for i, m in enumerate(self._metadata)}
+
+            # Filter out duplicates and keep track of which texts to add
+            unique_indices = []
+            for i, text in enumerate(texts):
+                if text not in text_to_idx:
+                    unique_indices.append(i)
+                    text_to_idx[text] = len(self._metadata) + len(unique_indices) - 1
+
+            if not unique_indices:
+                logger.info("No new texts to add - all were duplicates")
+                return
+
+            # Filter vectors and metadata to only include unique texts
+            unique_vectors = vectors[unique_indices]
+            unique_metadata = [metadata[i] for i in unique_indices]
+
+            # Check if we should convert to IVF index
+            if (
+                self.config.nlist > 0
+                and not isinstance(self._index, faiss.IndexIVFFlat)
+                and self._index.ntotal + len(unique_vectors) >= self._min_points
+            ):
+                # Create IVF index
+                quantizer = self._index
+                self._index = faiss.IndexIVFFlat(
+                    quantizer,
+                    self._dimension,
+                    self.config.nlist,
+                    faiss.METRIC_INNER_PRODUCT if self.config.metric == "cosine"
+                    else faiss.METRIC_L2
+                )
+
+                # Get all existing vectors
+                all_vectors = np.zeros((self._index.ntotal, self._dimension), dtype='float32')
+                self._index.reconstruct_n(0, self._index.ntotal, all_vectors)
+
+                # Train the index
+                self._index.train(all_vectors)
+                self._is_trained = True
+
+                # Add back the vectors
+                self._index.add(all_vectors)
+                logger.info(f"Converted to IVF index and trained with {self._index.ntotal} points")
+
+            # Check if IVF index needs training
+            if isinstance(self._index, faiss.IndexIVFFlat) and not self._is_trained:
+                # Train the index with these vectors
+                self._index.train(unique_vectors)
+                self._is_trained = True
+
+            # Normalize vectors for cosine similarity
+            if self.config.metric == "cosine":
+                faiss.normalize_L2(unique_vectors)
+
+            # Add vectors to index
+            self._index.add(unique_vectors)
+            self._metadata.extend(unique_metadata)
+
+            logger.info(f"Added {len(unique_vectors)} unique texts to index")
+
+        except Exception as e:
+            raise MemVidIndexError(f"Failed to add texts: {str(e)}")
+
+    def search_text(
+        self,
+        query_text: str,
+        k: int = 4,
+    ) -> List[SearchResult]:
+        """Search for similar texts using a text query.
+
+        Args:
+            query_text: Text to search for
+            k: Number of results to return
 
         Returns:
-            List[Tuple[int, float, ChunkMetadata]]: List of (chunk_id, distance, metadata) tuples,
-                sorted by distance (lower is better).
+            List of SearchResult objects containing the results and their similarity scores
+
+        Raises:
+            MemVidIndexError: If search fails
         """
-        self._ensure_loaded()
-        query_embedding = self.embedding_model.embed_query(query)
-        query_embedding = np.array([query_embedding]).astype('float32')
+        try:
+            if self._index is None:
+                raise MemVidIndexError("Index not initialized")
 
-        distances, indices = self.index.search(query_embedding, top_k)
+            # Convert query text to vector
+            query_vector = np.array(self.embeddings.embed_query(query_text), dtype='float32').reshape(1, -1)
 
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx >= 0 and idx in self.metadata:  # Valid result
-                metadata = self.metadata[idx]
-                results.append((int(idx), float(dist), metadata))
+            # Normalize query vector for cosine similarity
+            if self.config.metric == "cosine":
+                faiss.normalize_L2(query_vector)
 
-        return results
+            # Search using the vector
+            distances, indices = self._index.search(query_vector, k)
 
-    def get_chunks_by_frame(self, frame_number: int) -> List[ChunkMetadata]:
-        """Get all chunks associated with a frame.
+            # Create SearchResult objects
+            results = []
+            for idx, distance in zip(indices[0], distances[0]):
+                metadata = self._metadata[idx]
+                results.append(SearchResult.from_metadata(metadata, float(distance)))
+
+            return results
+
+        except Exception as e:
+            raise MemVidIndexError(f"Failed to search text: {str(e)}")
+
+    def get_metadata(self, indices: List[int]) -> List[Dict[str, Any]]:
+        """Get metadata for given indices.
 
         Args:
-            frame_number: Frame number to get chunks for.
+            indices: List of indices to get metadata for
 
         Returns:
-            List[ChunkMetadata]: List of chunk metadata for the specified frame.
-        """
-        self._ensure_loaded()
-        chunk_ids = self.frame_to_chunks.get(frame_number, set())
-        return [self.metadata[chunk_id] for chunk_id in chunk_ids if chunk_id in self.metadata]
+            List of metadata dictionaries
 
-    def get_chunk_by_id(self, chunk_id: int) -> Optional[ChunkMetadata]:
-        """Get chunk metadata by ID.
+        Raises:
+            MemVidIndexError: If getting metadata fails
+        """
+        try:
+            return [self._metadata[i] for i in indices]
+        except Exception as e:
+            raise MemVidIndexError(f"Failed to get metadata: {str(e)}")
+
+    def save(self, path: Path) -> None:
+        """Save the index and metadata to disk.
 
         Args:
-            chunk_id: ID of the chunk to retrieve.
+            path: Path to save the index
 
-        Returns:
-            Optional[ChunkMetadata]: Chunk metadata if found, None otherwise.
+        Raises:
+            MemVidIndexError: If saving fails
         """
-        self._ensure_loaded()
-        return self.metadata.get(chunk_id)
+        try:
+            if self._index is None:
+                raise MemVidIndexError("No index to save")
 
-    def save(self, path: str) -> None:
-        """Save index to disk.
+            # Create directory if it doesn't exist
+            path.mkdir(parents=True, exist_ok=True)
 
-        This method saves both the FAISS index and associated metadata to disk.
-        The index is saved with .faiss extension and metadata with .json or .msgpack extension.
+            # Save FAISS index
+            faiss.write_index(self._index, str(path / "index.faiss"))
+
+            # Save metadata
+            with open(path / "metadata.json", "w") as f:
+                json.dump(self._metadata, f)
+
+            logger.info(f"Saved index to {path}")
+
+        except Exception as e:
+            raise MemVidIndexError(f"Failed to save index: {str(e)}")
+
+    def load(self, path: Path) -> None:
+        """Load the index and metadata from disk.
 
         Args:
-            path: Base path to save index (without extension).
+            path: Path to load the index from
+
+        Raises:
+            MemVidIndexError: If loading fails
         """
-        self._ensure_loaded()
-        path = Path(path)
-        self._index_path = str(path.absolute())
+        try:
+            # Load FAISS index
+            self._index = faiss.read_index(str(path / "index.faiss"))
+            self._dimension = self._index.d
 
-        # Save FAISS index
-        faiss.write_index(self.index, str(path.with_suffix('.faiss')))
+            # Load metadata
+            with open(path / "metadata.json", "r") as f:
+                self._metadata = json.load(f)
 
-        # Prepare data for serialization
-        data = {
-            "metadata": self.metadata,
-            "frame_to_chunks": {k: list(v) for k, v in self.frame_to_chunks.items()},
-            "config": self.config.model_dump()
-        }
+            logger.info(f"Loaded index from {path}")
 
-        # Save metadata using selected format
-        if self.config.serialization_format == "msgpack":
-            with open(path.with_suffix('.msgpack'), 'wb') as f:
-                f.write(msgpack.packb(data))
-        else:  # json
-            with open(path.with_suffix('.json'), 'w') as f:
-                json.dump(data, f, indent=2)
-
-        logger.info(f"Saved index to {path} using {self.config.serialization_format} format")
-
-    def load(self, path: str) -> None:
-        """Load index from disk.
-
-        This method loads both the FAISS index and associated metadata from disk.
-        The index is loaded from .faiss extension and metadata from .json or .msgpack extension.
-
-        Args:
-            path: Base path to load index from (without extension).
-        """
-        path = Path(path)
-        self._index_path = str(path.absolute())
-
-        # Load FAISS index
-        self.index = faiss.read_index(str(path.with_suffix('.faiss')))
-
-        # Try to load metadata using msgpack first, fall back to json if not found
-        msgpack_path = path.with_suffix('.msgpack')
-        json_path = path.with_suffix('.json')
-
-        if msgpack_path.exists():
-            with open(msgpack_path, 'rb') as f:
-                data = msgpack.unpackb(f.read(), strict_map_key=False)
-            self.config.serialization_format = "msgpack"
-        elif json_path.exists():
-            with open(json_path, 'r') as f:
-                data = json.loads(f.read())
-            self.config.serialization_format = "json"
-        else:
-            raise FileNotFoundError(f"No metadata file found at {path}")
-
-        self.metadata = {int(k): v for k, v in data["metadata"].items()}
-        self.frame_to_chunks = defaultdict(
-            set,
-            {int(k): set(v) for k, v in data["frame_to_chunks"].items()}
-        )
-
-        # Update config if available
-        if "config" in data:
-            self.config = IndexConfig(**data["config"])
-
-        self._is_loaded = True
-        logger.info(f"Loaded index from {path} using {self.config.serialization_format} format")
-
-    def get_stats(self) -> IndexStats:
-        """Get index statistics.
-
-        Returns:
-            IndexStats: Statistics about the index including total chunks,
-                frames, and average chunks per frame.
-        """
-        self._ensure_loaded()
-        return IndexStats(
-            total_chunks=len(self.metadata),
-            total_frames=len(self.frame_to_chunks),
-            index_type=self.config.index_type,
-            embedding_model=getattr(self.embedding_model, "model_name", "unknown"),
-            dimension=self.dimension,
-            avg_chunks_per_frame=(
-                np.mean([len(chunks) for chunks in self.frame_to_chunks.values()])
-                if self.frame_to_chunks else 0
-            ),
-            config=self.config.model_dump()
-        )
+        except Exception as e:
+            raise MemVidIndexError(f"Failed to load index: {str(e)}")

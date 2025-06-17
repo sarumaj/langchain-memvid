@@ -12,40 +12,14 @@ from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 import asyncio
 import nest_asyncio
-from pydantic import BaseModel, Field
 import logging
 
-from .index import IndexManager, IndexConfig
-from .encoder import Encoder, EncoderConfig
-from .retriever import Retriever, RetrieverConfig
-
+from .index import IndexManager
+from .encoder import Encoder
+from .retriever import Retriever
+from .config import VectorStoreConfig
 
 logger = logging.getLogger(__name__)
-
-
-class VectorStoreConfig(BaseModel):
-    """Unified configuration for VectorStore.
-
-    This configuration combines settings for the index, encoder, and retriever
-    components into a single, organized structure.
-
-    Attributes:
-        index: Configuration for the FAISS index
-        encoder: Configuration for the QR code encoder
-        retriever: Configuration for the document retriever
-    """
-    index: IndexConfig = Field(
-        default_factory=IndexConfig,
-        description="Configuration for the FAISS index"
-    )
-    encoder: EncoderConfig = Field(
-        default_factory=EncoderConfig,
-        description="Configuration for the QR code encoder"
-    )
-    retriever: RetrieverConfig = Field(
-        default_factory=RetrieverConfig,
-        description="Configuration for the document retriever"
-    )
 
 
 class VectorStore(VectorStore):
@@ -93,7 +67,7 @@ class VectorStore(VectorStore):
         video_file: str,
         index_file: str,
         embedding: Embeddings,
-        config: VectorStoreConfig,
+        config: Optional[VectorStoreConfig] = None,
     ):
         """Initialize VectorStore.
 
@@ -105,7 +79,7 @@ class VectorStore(VectorStore):
         """
         self.video_file = str(Path(video_file).absolute())
         self.index_file = str(Path(index_file).absolute())
-        self.config = config
+        self.config = config or VectorStoreConfig()
 
         # Initialize components with their respective configs
         self.index_manager = IndexManager(
@@ -114,7 +88,7 @@ class VectorStore(VectorStore):
         )
 
         self.encoder = Encoder(
-            config=self.config.encoder,
+            config=self.config,
             index_manager=self.index_manager
         )
 
@@ -141,7 +115,7 @@ class VectorStore(VectorStore):
             self._retriever = Retriever(
                 video_file=self.video_file,
                 index_file=self.index_file,
-                config=self.config.retriever,
+                config=self.config,
                 index_manager=self.index_manager,
                 load_index=False  # Don't load index during initialization
             )
@@ -173,25 +147,25 @@ class VectorStore(VectorStore):
 
         try:
             # Add texts to encoder
-            self.encoder.add_chunks(texts)
+            self.encoder.add_chunks(texts, metadatas=metadatas)
 
             # Build video and index
             stats = self.encoder.build_video(
-                output_file=self.video_file,
-                index_file=self.index_file,
+                output_file=Path(self.video_file),
+                index_file=Path(self.index_file),
                 **kwargs
             )
 
             # Reload index in index manager after building
-            self.index_manager.load(self.index_file)
+            self.index_manager.load(Path(self.index_file))
 
             # Reset retriever if it exists to force recreation
             self._retriever = None
 
             # Log build statistics
             logger.info(
-                f"Built video with {stats.total_chunks} chunks "
-                f"({stats.video_size_mb:.2f} MB) in {stats.encoding_time:.2f}s"
+                f"Built video with {stats['total_chunks']} chunks "
+                f"({stats['video_size_mb']:.2f} MB)"
             )
 
             # Return chunk IDs
@@ -280,15 +254,7 @@ class VectorStore(VectorStore):
         Returns:
             List of Document objects
         """
-        results = self.retriever.search_with_metadata(query, top_k=k)
-
-        return [
-            Document(
-                page_content=result["text"],
-                metadata=result["metadata"]
-            )
-            for result in results
-        ]
+        return self.retriever._get_relevant_documents(query)
 
     async def asimilarity_search(
         self,
@@ -329,18 +295,8 @@ class VectorStore(VectorStore):
         Returns:
             List of (Document, score) tuples
         """
-        results = self.retriever.search_with_metadata(query, top_k=k)
-
-        return [
-            (
-                Document(
-                    page_content=result["text"],
-                    metadata=result["metadata"]
-                ),
-                result["score"]
-            )
-            for result in results
-        ]
+        docs = self.similarity_search(query, k=k, **kwargs)
+        return [(doc, doc.metadata.get("distance", 0.0)) for doc in docs]
 
     async def asimilarity_search_with_score(
         self,

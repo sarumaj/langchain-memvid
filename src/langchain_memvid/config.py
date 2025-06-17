@@ -1,94 +1,104 @@
 """
-Configuration for Memvid.
+Configuration management for MemVid.
 
-Original source: https://github.com/Olow304/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/config.py
+This module provides configuration classes for different components of the MemVid system.
+Each configuration class is a Pydantic model that provides validation and documentation.
 """
 
-from typing import TypedDict, Optional, Dict
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
-class VideoCodecConfig(TypedDict):
-    """Video codec configuration parameters."""
-    video_fps: int
-    frame_width: int
-    frame_height: int
-    video_preset: str
-    video_crf: int
-    pix_fmt: str
-    video_file_type: str
-    video_profile: str
-    extra_ffmpeg_args: Optional[str]
+class VideoConfig(BaseModel):
+    """Configuration for video processing."""
+
+    fps: int = Field(
+        default=30,
+        description="Frames per second for the output video",
+        ge=1,
+        le=60
+    )
+
+    resolution: tuple[int, int] = Field(
+        default=(1920, 1080),
+        description="Video resolution (width, height)"
+    )
+
+    codec: str = Field(
+        default="h264",
+        description="Video codec to use"
+    )
+
+    @field_validator("resolution", mode="before")
+    def validate_resolution(cls, v):
+        width, height = v
+        if width < 640 or height < 480:
+            raise ValueError("Resolution too low")
+        if width > 3840 or height > 2160:
+            raise ValueError("Resolution too high")
+        return v
 
 
-# Common x265 parameters for still image optimization
-STILL_IMAGE_PARAMS_BASE: str = (
-    "keyint=1"
-    ":tune=stillimage"
-)
+class QRCodeConfig(BaseModel):
+    """Configuration for QR code generation."""
 
-STILL_IMAGE_PARAMS: str = (
-    f"{STILL_IMAGE_PARAMS_BASE}"
-    ":no-scenecut"
-    ":strong-intra-smoothing"
-    ":constrained-intra"
-    ":rect"
-    ":amp"
-)
+    error_correction: str = Field(
+        default="M",
+        description="Error correction level (L, M, Q, H)",
+        pattern="^[LMQH]$"
+    )
 
-MP4V_PARAMETERS: VideoCodecConfig = {
-    "video_file_type": "mp4",
-    "video_fps": 15,
-    "video_crf": 18,            # Constant Rate Factor (0-51, lower = better quality)
-    "video_preset": "medium",   # ultrafast, superfast, veryfast, faster, fast, medium
-    "video_profile": "high",    # baseline, main, high (baseline for max compatibility)
-    "extra_ffmpeg_args": f"-x265-params {STILL_IMAGE_PARAMS_BASE}",
-    "frame_height": 256,
-    "frame_width": 256,
-    "pix_fmt": "yuv420p",
-}
+    box_size: int = Field(
+        default=10,
+        description="Size of each QR code box in pixels",
+        ge=1,
+        le=50
+    )
 
-H265_PARAMETERS: VideoCodecConfig = {
-    "video_file_type": "mkv",  # AKA HEVC
-    "video_fps": 30,
-    "video_crf": 28,
-    "video_preset": "slower",
-    "video_profile": "mainstillpicture",
-    "extra_ffmpeg_args": f"-x265-params {STILL_IMAGE_PARAMS}",
-    "frame_height": 256,
-    "frame_width": 256,
-    "pix_fmt": "yuv420p",
-}
+    border: int = Field(
+        default=4,
+        description="Border size in boxes",
+        ge=0,
+        le=10
+    )
 
-H264_PARAMETERS: VideoCodecConfig = {
-    "video_file_type": "mkv",  # AKA AVC
-    "video_fps": 30,
-    "video_crf": 28,
-    "video_preset": "slower",
-    "video_profile": "main",
-    "extra_ffmpeg_args": f"-x265-params {STILL_IMAGE_PARAMS}",
-    "frame_height": 256,
-    "frame_width": 256,
-    "pix_fmt": "yuv420p",
-}
 
-AV1_PARAMETERS: VideoCodecConfig = {
-    "video_file_type": "mkv",
-    "video_crf": 28,
-    "video_fps": 60,
-    "video_preset": "slower",
-    "video_profile": "mainstillpicture",
-    "extra_ffmpeg_args": f"-x265-params {STILL_IMAGE_PARAMS_BASE}",
-    "frame_height": 720,
-    "frame_width": 720,
-    "pix_fmt": "yuv420p",
-}
+class IndexConfig(BaseModel):
+    """Configuration for the vector index."""
 
-# Video codec configuration parameters
-CODEC_PARAMETERS: Dict[str, VideoCodecConfig] = {
-    "mp4v": MP4V_PARAMETERS,
-    "h265": H265_PARAMETERS,
-    "h264": H264_PARAMETERS,
-    "avc": H264_PARAMETERS,
-    "av1": AV1_PARAMETERS,
-    "hevc": H265_PARAMETERS
-}
+    index_type: str = Field(
+        default="faiss",
+        description="Type of index to use (faiss, annoy, etc.)"
+    )
+
+    metric: str = Field(
+        default="cosine",
+        description="Distance metric to use",
+        pattern="^(cosine|l2|ip)$"
+    )
+
+    nlist: int = Field(
+        default=100,
+        description="Number of clusters for FAISS index",
+        ge=1
+    )
+
+
+class VectorStoreConfig(BaseModel):
+    """Unified configuration for VectorStore."""
+
+    video: VideoConfig = Field(
+        default_factory=VideoConfig,
+        description="Video processing configuration"
+    )
+
+    qrcode: QRCodeConfig = Field(
+        default_factory=QRCodeConfig,
+        description="QR code generation configuration"
+    )
+
+    index: IndexConfig = Field(
+        default_factory=IndexConfig,
+        description="Vector index configuration"
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
