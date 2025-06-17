@@ -11,7 +11,7 @@ import cv2
 import qrcode
 
 from langchain_memvid.video import VideoProcessor
-from langchain_memvid.config import VideoConfig, QRCodeConfig
+from langchain_memvid.config import VideoConfig, QRCodeConfig, VideoBackend
 from langchain_memvid.exceptions import VideoProcessingError, QRCodeError
 
 
@@ -42,6 +42,49 @@ def video_processor(video_config, qrcode_config):
         video_config=video_config,
         qrcode_config=qrcode_config
     )
+
+
+def test_backend_selection():
+    """Test automatic backend selection based on codec."""
+    # OpenCV codecs
+    config = VideoConfig(codec="mp4v")
+    assert config.backend == VideoBackend.OPENCV
+
+    config = VideoConfig(codec="mjpg")
+    assert config.backend == VideoBackend.OPENCV
+
+    config = VideoConfig(codec="xvid")
+    assert config.backend == VideoBackend.OPENCV
+
+    # FFmpeg codecs
+    config = VideoConfig(codec="libx264")
+    assert config.backend == VideoBackend.FFMPEG
+
+    config = VideoConfig(codec="libx265")
+    assert config.backend == VideoBackend.FFMPEG
+
+    config = VideoConfig(codec="h265")
+    assert config.backend == VideoBackend.FFMPEG
+
+    config = VideoConfig(codec="av1")
+    assert config.backend == VideoBackend.FFMPEG
+
+
+def test_backend_override():
+    """Test manual backend override."""
+    # Override to FFmpeg
+    config = VideoConfig(
+        codec="mp4v",
+        backend=VideoBackend.FFMPEG
+    )
+    assert config.backend == VideoBackend.FFMPEG
+
+    # Override to OpenCV
+    config = VideoConfig(
+        codec="libx264",
+        backend=VideoBackend.OPENCV
+    )
+    assert config.backend == VideoBackend.OPENCV
 
 
 def test_create_qr_code(video_processor):

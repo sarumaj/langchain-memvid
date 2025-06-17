@@ -15,8 +15,10 @@ from PIL import Image
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from .exceptions import VideoProcessingError, QRCodeError
-from .config import VideoConfig, QRCodeConfig
+from ..exceptions import VideoProcessingError, QRCodeError
+from ..config import VideoConfig, QRCodeConfig, VideoBackend
+from .ffmpeg import FFmpegProcessor
+from .codecs import get_codec_parameters
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,49 @@ class VideoProcessor:
         self.width, self.height = video_config.resolution
         # Pre-calculate scaling factor for QR codes
         self._scale_factor = min(self.width, self.height) * 0.8
+
+        # Get codec parameters for file type validation
+        self._codec_params, is_supported = get_codec_parameters(video_config.codec)
+        if not is_supported:
+            logger.warning(f"Codec {video_config.codec} is not supported, using default parameters")
+
+        # Initialize video backend
+        if video_config.backend == VideoBackend.FFMPEG:
+            self._video_processor = FFmpegProcessor(
+                fps=video_config.fps,
+                resolution=video_config.resolution,
+                codec=video_config.codec,
+                ffmpeg_options=video_config.ffmpeg_options
+            )
+        else:
+            self._video_processor = None  # Use OpenCV methods directly
+
+    def _validate_output_path(self, output_path: Path) -> Path:
+        """Validate and adjust output path based on codec file type.
+
+        Args:
+            output_path: Original output path
+
+        Returns:
+            Adjusted output path with correct extension
+
+        Raises:
+            VideoProcessingError: If the codec doesn't support the requested extension
+        """
+        # Get expected extension from codec parameters
+        expected_ext = f".{self._codec_params.video_file_type}"
+        current_ext = output_path.suffix.lower()
+
+        if current_ext != expected_ext:
+            # Try to change the extension
+            new_path = output_path.with_suffix(expected_ext)
+            logger.warning(
+                f"Changing output extension from {current_ext} to {expected_ext} "
+                f"to match codec {self.video_config.codec} requirements"
+            )
+            return new_path
+
+        return output_path
 
     def create_qr_code(self, data: str) -> BaseImage:
         """Create a QR code image from data.
@@ -137,25 +182,33 @@ class VideoProcessor:
             if not frames:
                 raise VideoProcessingError("No frames to encode")
 
-            # Prepare all frames in parallel
-            prepared_frames = self._prepare_frames_batch(frames)
+            # Validate and adjust output path
+            output_path = self._validate_output_path(output_path)
 
-            # Set up video writer with optimized parameters
-            fourcc = cv2.VideoWriter_fourcc(*self.video_config.codec)
-            out = cv2.VideoWriter(
-                str(output_path),
-                fourcc,
-                self.video_config.fps,
-                (self.width, self.height),
-                isColor=True
-            )
+            if self._video_processor is not None:
+                # Use FFmpeg backend
+                self._video_processor.encode_video(frames, output_path)
+            else:
+                # Use OpenCV backend
+                # Prepare all frames in parallel
+                prepared_frames = self._prepare_frames_batch(frames)
 
-            # Write frames
-            for frame in prepared_frames:
-                out.write(frame)
+                # Set up video writer with optimized parameters
+                fourcc = cv2.VideoWriter_fourcc(*self.video_config.codec)
+                out = cv2.VideoWriter(
+                    str(output_path),
+                    fourcc,
+                    self.video_config.fps,
+                    (self.width, self.height),
+                    isColor=True
+                )
 
-            out.release()
-            logger.info(f"Video encoded successfully to {output_path}")
+                # Write frames
+                for frame in prepared_frames:
+                    out.write(frame)
+
+                out.release()
+                logger.info(f"Video encoded successfully to {output_path}")
 
         except Exception as e:
             raise VideoProcessingError(f"Failed to encode video: {str(e)}")
@@ -176,20 +229,25 @@ class VideoProcessor:
             VideoProcessingError: If video decoding fails
         """
         try:
-            cap = cv2.VideoCapture(str(video_path))
-            if not cap.isOpened():
-                raise VideoProcessingError(f"Failed to open video file: {video_path}")
+            if self._video_processor is not None:
+                # Use FFmpeg backend
+                yield from self._video_processor.decode_video(video_path)
+            else:
+                # Use OpenCV backend
+                cap = cv2.VideoCapture(str(video_path))
+                if not cap.isOpened():
+                    raise VideoProcessingError(f"Failed to open video file: {video_path}")
 
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                # Convert OpenCV frame to PIL Image
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                yield Image.fromarray(frame_rgb)
+                    # Convert OpenCV frame to PIL Image
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    yield Image.fromarray(frame_rgb)
 
-            cap.release()
+                cap.release()
 
         except Exception as e:
             raise VideoProcessingError(f"Failed to decode video: {str(e)}")

@@ -5,11 +5,24 @@ This module provides configuration classes for different components of the MemVi
 Each configuration class is a Pydantic model that provides validation and documentation.
 """
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
+from enum import Enum
+from typing import Optional, Dict, Any
+
+
+class VideoBackend(str, Enum):
+    """Video processing backend to use."""
+    OPENCV = "opencv"
+    FFMPEG = "ffmpeg"
 
 
 class VideoConfig(BaseModel):
     """Configuration for video processing."""
+
+    codec: str = Field(
+        default="mp4v",
+        description="Video codec to use. Backend will be automatically selected based on codec."
+    )
 
     fps: int = Field(
         default=30,
@@ -23,9 +36,19 @@ class VideoConfig(BaseModel):
         description="Video resolution (width, height)"
     )
 
-    codec: str = Field(
-        default="h264",
-        description="Video codec to use"
+    # Optional backend override
+    backend: Optional[VideoBackend] = Field(
+        default=None,
+        description=(
+            "Optional override for video processing backend. "
+            "If not set, backend will be selected based on codec."
+        )
+    )
+
+    # FFmpeg specific options
+    ffmpeg_options: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Additional FFmpeg options"
     )
 
     @field_validator("resolution", mode="before")
@@ -36,6 +59,17 @@ class VideoConfig(BaseModel):
         if width > 3840 or height > 2160:
             raise ValueError("Resolution too high")
         return v
+
+    @model_validator(mode="after")
+    def set_backend_from_codec(self):
+        """Set backend based on codec if not explicitly set."""
+        if self.backend is None:
+            self.backend = (
+                VideoBackend.FFMPEG
+                if self.codec.lower().startswith(("lib", "h265", "av1"))
+                else VideoBackend.OPENCV
+            )
+        return self
 
 
 class QRCodeConfig(BaseModel):
