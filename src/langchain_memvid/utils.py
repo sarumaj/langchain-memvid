@@ -3,6 +3,8 @@ Optimized utility functions for Memvid.
 
 This module provides core utility functions for QR code generation, video frame processing,
 and text chunking operations used in the Memvid application.
+
+Original source: https://github.com/Olow304/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/utils.py
 """
 
 import base64

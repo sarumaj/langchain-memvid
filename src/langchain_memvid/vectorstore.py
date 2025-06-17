@@ -85,9 +85,7 @@ class VectorStore(VectorStore):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            # Apply nest_asyncio to the new loop as well
-            nest_asyncio.apply(loop)
-
+        nest_asyncio.apply(loop)
         return loop
 
     def __init__(

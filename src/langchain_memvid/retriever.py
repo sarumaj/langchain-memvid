@@ -1,7 +1,7 @@
 """
 Retriever - Fast semantic search, QR frame extraction, and context assembly
 
-Original code from https://github.com/memvid/memvid/blob/main/memvid/retriever.py
+Original code from https://github.com/memvid/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/retriever.py
 """
 
 import orjson as json

@@ -1,7 +1,7 @@
 """
 Encoder - Unified encoding with native OpenCV and FFmpeg (Docker/native) support
 
-Original source: https://github.com/Olow304/memvid/blob/main/memvid/encoder.py
+Original source: https://github.com/Olow304/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/encoder.py
 """
 
 import orjson as json

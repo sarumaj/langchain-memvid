@@ -1,7 +1,7 @@
 """
 Configuration for Memvid.
 
-Original source: https://github.com/Olow304/memvid/blob/main/memvid/config.py
+Original source: https://github.com/Olow304/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/config.py
 """
 
 from typing import TypedDict, Optional, Dict

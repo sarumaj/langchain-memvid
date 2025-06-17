@@ -24,7 +24,7 @@ Example:
     results = index_manager.search("query", top_k=5)
     ```
 
-Original source: https://github.com/Olow304/memvid/blob/main/memvid/index.py
+Original source: https://github.com/Olow304/memvid/blob/5524b0a8b268c02df01cca87110cc1b978460c97/memvid/index.py
 """
 
 import orjson as json
