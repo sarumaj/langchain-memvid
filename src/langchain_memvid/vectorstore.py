@@ -9,19 +9,20 @@ the LangChain MemVid retriever to search for similar documents.
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Generator
 from pathlib import Path
 import asyncio
 import nest_asyncio
-import logging
 from contextlib import contextmanager
 
 from .index import IndexManager
 from .encoder import Encoder
 from .retriever import Retriever
 from .config import VectorStoreConfig
+from .utils import get_on_first_match
+from .logging import get_logger
 
-logger = logging.getLogger(f"langchain_memvid.{__name__}")
+logger = get_logger("vectorstore")
 
 
 class VectorStore(VectorStore):
@@ -71,7 +72,7 @@ class VectorStore(VectorStore):
         self._retriever: Optional[Retriever] = None
 
     @contextmanager
-    def _access_retriever(self, k: int):
+    def _access_retriever(self, k: int) -> Generator[Retriever, None, None]:
         """Context manager for temporarily setting retriever's k value.
 
         This avoids creating copies of the retriever while maintaining thread safety
@@ -317,7 +318,13 @@ class VectorStore(VectorStore):
             List of (Document, score) tuples
         """
         docs = self.similarity_search(query, k=k, **kwargs)
-        return [(doc, doc.metadata.get("distance", 0.0)) for doc in docs]
+        return [(doc, get_on_first_match(
+            doc.metadata,
+            "similarity",
+            "distance",
+            expected_type=float,
+            default=0.0
+        )) for doc in docs]
 
     async def asimilarity_search_with_score(
         self,

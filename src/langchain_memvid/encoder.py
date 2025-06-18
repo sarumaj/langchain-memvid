@@ -10,14 +10,14 @@ import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-import logging
 
 from .exceptions import EncodingError
 from .video import VideoProcessor
 from .index import IndexManager
 from .config import VectorStoreConfig
+from .logging import get_logger
 
-logger = logging.getLogger(f"langchain_memvid.{__name__}")
+logger = get_logger("encoder")
 
 
 @dataclass

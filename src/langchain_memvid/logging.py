@@ -9,6 +9,20 @@ import sys
 from typing import Optional
 
 
+LOGGER_PREFIX = "langchain_memvid"
+
+
+class LogLevelFilter(logging.Filter):
+    """Filter to only log messages at or above a certain level."""
+
+    def __init__(self, lo: int, hi: int):
+        self.lo = lo
+        self.hi = hi
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return self.lo <= record.levelno <= self.hi
+
+
 def setup_logger(
     level: int = logging.INFO,
     format_string: Optional[str] = None,
@@ -25,16 +39,12 @@ def setup_logger(
         Configured logger instance
     """
     # Create logger
-    logger = logging.getLogger("langchain_memvid")
+    logger = logging.getLogger(LOGGER_PREFIX)
 
     # Prevent adding handlers multiple times
     if not logger.handlers:
         # Set level
         logger.setLevel(level)
-
-        # Create console handler
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(level)
 
         # Create formatter
         if format_string is None:
@@ -43,19 +53,24 @@ def setup_logger(
             date_format = "%Y-%m-%d %H:%M:%S"
 
         formatter = logging.Formatter(fmt=format_string, datefmt=date_format)
-        handler.setFormatter(formatter)
 
-        # Add handler to logger
-        logger.addHandler(handler)
+        # Create handlers
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setLevel(logging.DEBUG)
+        stdout_handler.addFilter(LogLevelFilter(logging.DEBUG, logging.WARNING))
+        stdout_handler.setFormatter(formatter)
+        logger.addHandler(stdout_handler)
+
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.ERROR)
+        stderr_handler.addFilter(LogLevelFilter(logging.ERROR, logging.CRITICAL))
+        stderr_handler.setFormatter(formatter)
+        logger.addHandler(stderr_handler)
 
         # Don't propagate to root logger
         logger.propagate = False
 
     return logger
-
-
-# Create default logger instance
-logger = setup_logger()
 
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:
@@ -68,5 +83,9 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
         Logger instance
     """
     if name:
-        return logging.getLogger(f"langchain_memvid.{name}")
+        return logging.getLogger(f"{LOGGER_PREFIX}.{name}")
     return logger
+
+
+# Create default logger instance
+logger = setup_logger()

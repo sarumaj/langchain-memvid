@@ -7,7 +7,7 @@ Each configuration class is a Pydantic model that provides validation and docume
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 from enum import Enum
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Literal
 
 
 class VideoBackend(str, Enum):
@@ -106,7 +106,7 @@ class QRCodeConfig(BaseModel):
 class IndexConfig(BaseModel):
     """Configuration for the vector index."""
 
-    index_type: str = Field(
+    index_type: Literal["faiss"] = Field(
         default="faiss",
         description="Type of vector index to use"
     )

@@ -43,7 +43,7 @@ exclude = ["tests*", "examples*"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = [
-    "-v",
+    "-vv",
     "--asyncio-mode=auto"
 ]
 filterwarnings = [

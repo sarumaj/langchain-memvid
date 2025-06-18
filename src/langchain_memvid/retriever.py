@@ -29,27 +29,25 @@ class Retriever(BaseRetriever, BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        extra='forbid',
-        strict=False,  # Allow type coercion
-        from_attributes=True  # Allow conversion from objects with attributes
+        strict=False,            # Allow type coercion
+        from_attributes=True     # Allow conversion from objects with attributes
     )
 
     video_file: Path = Field(description="Path to the video file")
     index_dir: Path = Field(description="Path to the index directory")
     config: VectorStoreConfig = Field(description="Configuration for the retriever")
+
+    # Using Any to allow unit testing
     index_manager: Union[IndexManager, Any] = Field(description="Index manager for vector search")
+
+    # Using Any to allow unit testing, initialized in model_post_init
     video_processor: Union[VideoProcessor, Any] = Field(description="Video processor for video decoding", default=None)
+
     load_index: bool = Field(default=True, description="Whether to load the index during initialization")
     k: int = Field(default=4, description="Number of results to return for semantic search")
     frame_cache_size: int = Field(default=100, description="Maximum number of frames to cache in memory")
-    metadata: Optional[Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Optional metadata associated with the retriever"
-    )
-    tags: Optional[List[str]] = Field(
-        default_factory=list,
-        description="Optional list of tags associated with the retriever"
-    )
+
+    # Using PrivateAttr to avoid validation errors
     _frame_cache: Dict[int, Any] = PrivateAttr(default_factory=dict)
 
     def model_post_init(self, __context: Any) -> None:
@@ -68,7 +66,8 @@ class Retriever(BaseRetriever, BaseModel):
             logger.info(f"Initialized retriever with video: {self.video_file}")
 
         except Exception as e:
-            raise RetrievalError(f"Failed to initialize retriever: {str(e)}")
+            logger.error(f"Failed to initialize retriever: {str(e)}")
+            raise RetrievalError(f"Failed to initialize retriever: {str(e)}") from e
 
     def invoke(
         self,
@@ -213,7 +212,8 @@ class Retriever(BaseRetriever, BaseModel):
             return documents
 
         except Exception as e:
-            raise RetrievalError(f"Failed to retrieve documents: {str(e)}")
+            logger.error(f"Failed to retrieve documents: {str(e)}")
+            raise RetrievalError(f"Failed to retrieve documents: {str(e)}") from e
 
     def get_document_by_id(self, doc_id: int) -> Optional[Document]:
         """Get a document by its ID.
@@ -240,7 +240,8 @@ class Retriever(BaseRetriever, BaseModel):
             )
 
         except Exception as e:
-            raise RetrievalError(f"Failed to get document by ID: {str(e)}")
+            logger.error(f"Failed to get document by ID: {str(e)}")
+            raise RetrievalError(f"Failed to get document by ID: {str(e)}") from e
 
     def get_documents_by_ids(self, doc_ids: List[int]) -> List[Document]:
         """Get multiple documents by their IDs.
@@ -278,7 +279,8 @@ class Retriever(BaseRetriever, BaseModel):
             return documents
 
         except Exception as e:
-            raise RetrievalError(f"Failed to get documents by IDs: {str(e)}")
+            logger.error(f"Failed to get documents by IDs: {str(e)}")
+            raise RetrievalError(f"Failed to get documents by IDs: {str(e)}") from e
 
     def _get_frame(self, frame_number: int) -> Optional[Any]:
         """Get a specific frame from the video with caching.
@@ -342,7 +344,8 @@ class Retriever(BaseRetriever, BaseModel):
             )
 
         except Exception as e:
-            raise RetrievalError(f"Failed to decode frame: {str(e)}")
+            logger.error(f"Failed to decode frame: {str(e)}")
+            raise RetrievalError(f"Failed to decode frame: {str(e)}") from e
 
     def decode_all_frames(self) -> List[Document]:
         """Decode all frames from the video.
@@ -379,12 +382,14 @@ class Retriever(BaseRetriever, BaseModel):
                         )
                         documents.append(doc)
                     except orjson.JSONDecodeError:
+                        logger.warning(f"Failed to parse QR code data: {data}")
                         continue
 
             return documents
 
         except Exception as e:
-            raise RetrievalError(f"Failed to decode all frames: {str(e)}")
+            logger.error(f"Failed to decode all frames: {str(e)}")
+            raise RetrievalError(f"Failed to decode all frames: {str(e)}") from e
 
     def clear_cache(self) -> None:
         """Clear the frame cache."""

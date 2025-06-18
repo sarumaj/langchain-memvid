@@ -95,32 +95,36 @@ class IndexManager:
             test_vector = self.embeddings.embed_query("test")
             self._dimension = len(test_vector)
 
-            if self.config.index_type == "faiss":
-                match self.config.metric:
-                    case "cosine":
-                        self._index = faiss.IndexFlatIP(self._dimension)
-                    case "l2":
-                        self._index = faiss.IndexFlatL2(self._dimension)
-                    case _:
-                        raise MemVidIndexError(f"Unsupported metric: {self.config.metric}")
+            match self.config.index_type:
+                case "faiss":
+                    match self.config.metric:
+                        case "cosine" | "ip":
+                            self._index = faiss.IndexFlatIP(self._dimension)
+                        case "l2":
+                            self._index = faiss.IndexFlatL2(self._dimension)
+                        case _:
+                            raise MemVidIndexError(f"Unsupported metric: {self.config.metric}")
 
-                # If using IVF index
-                if self.config.nlist > 0:
-                    # FAISS requires at least 30 * nlist points for training
-                    self._min_points = 30 * self.config.nlist
+                    # If using IVF index
+                    if self.config.nlist > 0:
+                        # FAISS requires at least 30 * nlist points for training
+                        self._min_points = 30 * self.config.nlist
 
-                    # Use flat index if minimum points is too high
-                    if self._min_points > 1000:
-                        logger.warning(
-                            f"Minimum points required ({self._min_points}) is too high. "
-                            "Falling back to flat index."
-                        )
-                        self._is_trained = True
+                        # Use flat index if minimum points is too high
+                        if self._min_points > 1000:
+                            logger.warning(
+                                f"Minimum points required ({self._min_points}) is too high. "
+                                "Falling back to flat index."
+                            )
+                            self._is_trained = True
+                        else:
+                            # We'll convert to IVF when we have enough points
+                            self._is_trained = True
                     else:
-                        # We'll convert to IVF when we have enough points
                         self._is_trained = True
-                else:
-                    self._is_trained = True
+
+                case _:
+                    raise MemVidIndexError(f"Unsupported index type: {self.config.index_type}")
 
             logger.info(f"Created {self.config.index_type} index with {self.config.metric} metric")
 

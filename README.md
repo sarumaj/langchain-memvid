@@ -51,12 +51,30 @@ vs = VectorStore.from_texts(
 results = vs.similarity_search("query", k=2)
 ```
 
+## IPython Extension (Optional)
+
+For enhanced Jupyter notebook and IPython experience, use the optional IPython extension:
+
+```python
+%pip install langchain-memvid
+%load_ext ipykernel_memvid_extension
+```
+
+The extension provides magic commands for:
+- Displaying data as bullet lists and tables (`%as_bullet_list`, `%as_table`)
+- Automatic cleanup of temporary files (`%cleanup`)
+- Package installation with visual feedback (`%pip_install`)
+- Sound notifications for cell completion
+- Enhanced progress bars
+
+For detailed usage instructions, see [IPYTHON_EXTENSION.md](IPYTHON_EXTENSION.md).
+
 ## Example Notebooks
 
-To help you get started, we provide two comprehensive Jupyter notebooks in the `examples` directory:
+To help you get started, we provide two comprehensive Jupyter notebooks in the [examples](examples) directory:
 
-1. `quickstart.ipynb` - A basic tutorial demonstrating core functionality and common use cases
-2. `advanced.ipynb` - An in-depth guide covering advanced features and customization options
+1. [quickstart.ipynb](examples/quickstart.ipynb) - A basic tutorial demonstrating core functionality and common use cases
+2. [advanced.ipynb](examples/advanced.ipynb) - An in-depth guide covering advanced features and customization options
 
 These notebooks provide hands-on examples and detailed explanations of the library's capabilities.
 
@@ -158,7 +176,7 @@ This project uses several open-source libraries:
 - Pydantic is licensed under the MIT License
 - Other dependencies are licensed under MIT, Apache 2.0, or AGPL-3.0
 
-Full license texts for all dependencies are included in the `licenses` directory of this project. Each license file is named according to the project it belongs to (e.g., `licenses/faiss.txt`, `licenses/opencv.txt`, etc.).
+Full license texts for all dependencies are included in the [licenses](licenses) directory of this project. Each license file is named according to the project it belongs to (e.g., `licenses/faiss.txt`, `licenses/opencv.txt`, etc.).
 
 For the original license texts and more information, please refer to the respective projects' repositories.
 
