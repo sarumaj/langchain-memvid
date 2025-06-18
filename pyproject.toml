@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 authors = [
     { name="Dawid Ciepiela", email="71898979+sarumaj@users.noreply.github.com" }
 ]
+urls = { repository = "https://github.com/sarumaj/langchain-memvid" }
 readme = "README.md"
 license = { text = "BSD-3-Clause" }
 classifiers = [

@@ -13,6 +13,7 @@ except ImportError:
     IPYTHON_INSTALLED = False
 
 if IPYTHON_INSTALLED:
+    import re
     import shutil
     import traceback
     from pathlib import Path
@@ -24,6 +25,7 @@ if IPYTHON_INSTALLED:
     from IPython.core.interactiveshell import ExecutionResult
     from IPython.core.magic import Magics, magics_class, line_cell_magic, line_magic
     from IPython.display import clear_output, display, HTML
+    from IPython.utils.io import capture_output
 
     def ensure_import_module(name: str, shell: Optional[InteractiveShell] = None) -> Optional[ModuleType]:
         """Ensure a module is imported, installing it if necessary.
@@ -95,6 +97,14 @@ if IPYTHON_INSTALLED:
         """
         display_html(message, "orange")
 
+    def strip_version(package: str) -> str:
+        """Strip the version from a package name.
+
+        Args:
+            package (str): The package name to strip the version from.
+        """
+        return re.compile(r'[<>=]+.*').sub('', package)
+
     @magics_class
     class MemvidMagics(Magics):
         """IPython magic commands for LangChain MemVid."""
@@ -105,8 +115,12 @@ if IPYTHON_INSTALLED:
                 shell (InteractiveShell): The IPython shell.
             """
             super().__init__(shell)
+
             self.shell = shell
             self.shell.events.register('post_run_cell', self.post_run_cell)
+
+            global chime
+            self.chime_themes = chime.themes() if chime is not None else []
 
         def post_run_cell(self, result: ExecutionResult):
             """Post-run cell event handler.
@@ -265,9 +279,34 @@ if IPYTHON_INSTALLED:
             try:
                 self.shell.run_line_magic('pip', f"install {line}")
                 clear_output()
+
+                with capture_output() as captured:
+                    self.shell.run_line_magic('pip', "freeze")
+
+                available_packages = captured.stdout.strip().splitlines()
+                installed_packages = [
+                    item for item in available_packages if any(
+                        item.startswith(strip_version(package).strip())
+                        for package in line.split(' ')
+                        if package
+                    )
+                ]
+
                 display_notification(
-                    "<b>Installed:</b>"
-                    f"<ul>{''.join(f'<li>{item}</li>' for item in line.split(' '))}</ul>"
+                    "<p><b>Installed:</b></p>"
+                    "<table><tr>{headers}</tr>{rows}</table>".format(
+                        headers="".join(
+                            f'<th style="text-align: left"><b>{header}</b></th>'
+                            for header in ('Package', 'Version')
+                        ),
+                        rows="".join(
+                            '<tr>' + ''.join(
+                                f'<td style="text-align: left">{element}</td>'
+                                for element in item.split("==")
+                            ) + '</tr>'
+                            for item in installed_packages
+                        )
+                    )
                 )
 
             except Exception as e:
@@ -282,6 +321,28 @@ if IPYTHON_INSTALLED:
         def restart_kernel(self, line: str, cell: Optional[str] = None):
             """Restart the Jupyter kernel."""
             display(HTML("<script>Jupyter.notebook.kernel.restart()</script>"))
+
+        @line_magic
+        def list_sound_themes(self, line: str):
+            """Display the available sound themes."""
+            display_notification(
+                f"<p><b>Available sound themes:</b></p>"
+                f"<ul>{''.join(f'<li>{theme}</li>' for theme in self.chime_themes)}</ul>"
+            )
+
+        @line_magic
+        def set_sound_theme(self, line: str):
+            """Set the chime theme."""
+            if (line := line.strip()) not in self.chime_themes:
+                display_alert(
+                    f"<p><b>Sound theme {line} not found in sound themes:</b></p>"
+                    f"<ul>{''.join(f'<li>{theme}</li>' for theme in self.chime_themes)}</ul>"
+                )
+                return
+
+            global chime
+            chime.theme(line)
+            display_notification(f"<b>Set sound theme to {line}.</b>")
 
     def load_ipython_extension(shell: InteractiveShell):
         """Load the IPython extension."""

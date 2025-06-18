@@ -74,6 +74,20 @@ Restart the Jupyter kernel:
 %restart_kernel
 ```
 
+### `%list_sound_themes`
+List available sound themes:
+
+```python
+%list_sound_themes
+```
+
+### `%set_sound_theme`
+Set a sound theme on completion of cell execution:
+
+```python
+%set_sound_themes zelda
+```
+
 ## Features
 
 - **Sound notifications**: Plays a sound when cells complete (requires `chime`)
@@ -82,26 +96,6 @@ Restart the Jupyter kernel:
 - **Progress bars**: Enhanced progress tracking with `tqdm`
 - **Table formatting**: Pretty display of data structures
 
-## Troubleshooting
-
-If you encounter issues:
-
-1. Make sure you've installed with the `[ipython]` extra:
-   ```bash
-   pip install langchain-memvid[ipython]
-   ```
-
-2. Check that you're in an IPython environment (Jupyter notebook, IPython console, etc.)
-
-3. If sound notifications don't work, install chime:
-   ```bash
-   pip install chime
-   ```
-
-4. For progress bar issues, ensure ipywidgets is installed:
-   ```bash
-   pip install ipywidgets
-   ```
 
 ## Development
 
