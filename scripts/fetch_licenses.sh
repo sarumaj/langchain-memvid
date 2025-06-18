@@ -31,5 +31,6 @@ fetch_license "nest_asyncio" "https://raw.githubusercontent.com/erdewit/nest_asy
 fetch_license "pytest" "https://raw.githubusercontent.com/pytest-dev/pytest/main/LICENSE"
 fetch_license "pytest_asyncio" "https://raw.githubusercontent.com/pytest-dev/pytest-asyncio/main/LICENSE"
 fetch_license "memvid" "https://raw.githubusercontent.com/Olow304/memvid/refs/heads/main/LICENSE"
+fetch_license "ffmpeg" "https://www.ffmpeg.org/legal.html"
 
 echo -e "\nDone! License files are in the 'licenses' directory." 
