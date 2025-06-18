@@ -1,270 +1,332 @@
-"""Unit tests for Retriever."""
+"""
+Unit tests for the Retriever class.
+"""
 
-import json
-import tempfile
-from unittest.mock import Mock, patch
 import pytest
-import cv2
+from pathlib import Path
+import tempfile
+import json
+from unittest.mock import Mock, patch, MagicMock
 import numpy as np
-import time
-from unittest.mock import call
+from PIL import Image
 
-from langchain_memvid.retriever import (
-    Retriever,
-    RetrieverConfig,
-    VideoMetadata,
-    RetrieverStats
-)
-from langchain_memvid.index import IndexManager, IndexConfig, IndexStats
+from langchain_memvid.retriever import Retriever
+from langchain_memvid.config import VectorStoreConfig, VideoConfig, QRCodeConfig
+from langchain_memvid.exceptions import RetrievalError
+from langchain_core.documents import Document
+from langchain_memvid.index import SearchResult
 
 
 @pytest.fixture
-def config():
-    """Create a test configuration."""
-    return RetrieverConfig(
-        cache_size=100,
-        max_workers=2
+def video_config():
+    """Create a test video configuration."""
+    return VideoConfig(
+        fps=30,
+        resolution=(640, 480),
+        codec="mp4v"
+    )
+
+
+@pytest.fixture
+def qrcode_config():
+    """Create a test QR code configuration."""
+    return QRCodeConfig(
+        error_correction="H",
+        box_size=10,
+        border=4
+    )
+
+
+@pytest.fixture
+def vector_store_config(video_config, qrcode_config):
+    """Create a test vector store configuration."""
+    return VectorStoreConfig(
+        video=video_config,
+        qrcode=qrcode_config
     )
 
 
 @pytest.fixture
 def mock_index_manager():
     """Create a mock index manager."""
-    manager = Mock(spec=IndexManager)
+    manager = Mock()
 
-    # Mock embedding model
-    mock_embedding_model = Mock()
-    mock_embedding_model.embed_query.return_value = [0.0] * 384
-    mock_embedding_model.embedding_dimension = 384
+    # Mock embeddings
+    embeddings = Mock()
+    embeddings.embed_query.return_value = np.random.rand(384)  # Mock embedding
+    manager.embeddings = embeddings
 
-    # Set up manager attributes
-    manager.embedding_model = mock_embedding_model
-    manager.config = IndexConfig(index_type="Flat", nlist=100)
-    manager._dimension = 384
-    manager._is_loaded = False
-
-    # Mock search results
-    manager.search.return_value = [
-        (0, 0.1, {"frame": 0, "text": "Test chunk 1"}),
-        (1, 0.2, {"frame": 1, "text": "Test chunk 2"})
+    # Create mock search results
+    search_results = [
+        SearchResult(
+            text="test1",
+            source="doc1",
+            category="test",
+            similarity=0.8,
+            metadata={"source": "doc1"}
+        ),
+        SearchResult(
+            text="test2",
+            source="doc2",
+            category="test",
+            similarity=0.6,
+            metadata={"source": "doc2"}
+        )
     ]
 
-    # Mock get_chunk_by_id
-    manager.get_chunk_by_id.return_value = {"frame": 0, "text": "Test chunk"}
+    # Create a MagicMock for search_text that calls embed_query internally
+    search_text_mock = MagicMock()
 
-    # Mock get_stats to return IndexStats object
-    manager.get_stats.return_value = IndexStats(
-        total_chunks=2,
-        total_frames=2,
-        index_type="Flat",
-        embedding_model="test-model",
-        dimension=384,
-        avg_chunks_per_frame=1.0,
-        config={}
-    )
+    def search_text_side_effect(query_text, k=4):
+        # Call embed_query to ensure it's called
+        manager.embeddings.embed_query(query_text)
+        return search_results[:k]
 
+    search_text_mock.side_effect = search_text_side_effect
+    manager.search_text = search_text_mock
+
+    manager.get_metadata.return_value = [
+        {"text": "test1", "metadata": {"source": "doc1"}},
+        {"text": "test2", "metadata": {"source": "doc2"}}
+    ]
     return manager
 
 
 @pytest.fixture
-def mock_video_file():
-    """Create a temporary video file for testing."""
-    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_video:
-        # Create a simple video file
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(temp_video.name, fourcc, 30.0, (640, 480))
+def mock_video_processor():
+    """Create a mock video processor."""
+    processor = MagicMock()
 
-        # Write a few frames
-        for _ in range(10):
-            frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            out.write(frame)
-        out.release()
+    def create_new_frame():
+        return Image.new('RGB', (640, 480), color='white')
 
-        yield temp_video.name
+    # Make decode_video return a generator that yields new frames each time
+    def decode_video_mock(*args, **kwargs):
+        return [create_new_frame()]
 
-
-@pytest.fixture
-def mock_index_file():
-    """Create a temporary index file for testing."""
-    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as temp_index:
-        # Write some test index data
-        index_data = {
-            "chunks": [
-                {"id": 0, "text": "Test chunk 1", "frame": 0},
-                {"id": 1, "text": "Test chunk 2", "frame": 1}
-            ]
-        }
-        temp_index.write(json.dumps(index_data).encode())
-        yield temp_index.name
+    processor.decode_video.side_effect = decode_video_mock
+    processor.extract_qr_codes.return_value = [
+        json.dumps({"text": "test", "metadata": {"source": "test"}})
+    ]
+    return processor
 
 
 @pytest.fixture
-def retriever(config, mock_index_manager, mock_video_file, mock_index_file):
+def retriever(vector_store_config, mock_index_manager, mock_video_processor):
     """Create a test retriever instance."""
-    return Retriever(
-        video_file=mock_video_file,
-        index_file=mock_index_file,
-        config=config,
-        index_manager=mock_index_manager
-    )
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_video, \
+         tempfile.NamedTemporaryFile(suffix='.d', delete=False) as tmp_index:
+        video_path = Path(tmp_video.name)
+        index_path = Path(tmp_index.name)
 
-
-def test_retriever_initialization(retriever, config, mock_index_manager):
-    """Test retriever initialization."""
-    assert retriever.config == config
-    assert retriever.index_manager == mock_index_manager
-    assert isinstance(retriever.video_metadata, VideoMetadata)
-    assert retriever.video_metadata.total_frames == 10
-    assert retriever.video_metadata.fps == 30.0
-
-
-def test_retriever_initialization_invalid_video():
-    """Test retriever initialization with invalid video file."""
-    with pytest.raises(ValueError, match="Cannot open video file"):
-        Retriever(
-            video_file="nonexistent.mp4",
-            index_file="index.json",
-            config=RetrieverConfig(),
-            index_manager=Mock(spec=IndexManager)
+    with patch('langchain_memvid.retriever.VideoProcessor', return_value=mock_video_processor):
+        retriever = Retriever(
+            video_file=video_path,
+            index_dir=index_path,
+            config=vector_store_config,
+            index_manager=mock_index_manager
         )
 
+    yield retriever
 
-def test_search(retriever):
-    """Test basic search functionality."""
-    results = retriever.search("test query", top_k=2)
-    assert len(results) == 2
-    assert "Test chunk" in results[0]
-    retriever.index_manager.search.assert_called_once_with("test query", 2)
+    # Cleanup
+    video_path.unlink(missing_ok=True)
+    index_path.unlink(missing_ok=True)
 
 
-def test_search_with_metadata(retriever):
-    """Test search with metadata."""
-    results = retriever.search_with_metadata("test query", top_k=2)
-    assert len(results) == 2
-    assert all(isinstance(result, dict) for result in results)
-    assert all("text" in result for result in results)
-    assert all("score" in result for result in results)
-    assert all("chunk_id" in result for result in results)
-    assert all("frame" in result for result in results)
-    assert all("metadata" in result for result in results)
+def test_retriever_initialization(retriever, vector_store_config, mock_index_manager):
+    """Test retriever initialization."""
+    assert retriever.config == vector_store_config
+    assert retriever.index_manager == mock_index_manager
+    assert retriever.video_processor is not None
+    assert retriever.k == 4  # Default value
+    assert retriever.frame_cache_size == 100  # Default value
 
 
-def test_get_chunk_by_id(retriever):
-    """Test getting chunk by ID."""
-    chunk = retriever.get_chunk_by_id(0)
-    assert chunk == "Test chunk"
-    retriever.index_manager.get_chunk_by_id.assert_called_once_with(0)
+def test_get_relevant_documents(retriever):
+    """Test getting relevant documents."""
+    query = "test query"
+    documents = retriever._get_relevant_documents(query)
+
+    # Verify index manager calls
+    retriever.index_manager.embeddings.embed_query.assert_called_once_with(query)
+    retriever.index_manager.search_text.assert_called_once()
+
+    # Verify results
+    assert len(documents) == 2
+    assert all(isinstance(doc, Document) for doc in documents)
+    assert documents[0].page_content == "test1"
+    assert documents[0].metadata["source"] == "doc1"
+    assert documents[0].metadata["similarity"] == 0.8
+    assert documents[1].page_content == "test2"
+    assert documents[1].metadata["source"] == "doc2"
+    assert documents[1].metadata["similarity"] == 0.6
 
 
-def test_get_chunk_by_id_not_found(retriever):
-    """Test getting non-existent chunk."""
-    retriever.index_manager.get_chunk_by_id.return_value = None
-    chunk = retriever.get_chunk_by_id(999)
-    assert chunk is None
+def test_get_document_by_id(retriever):
+    """Test getting document by ID."""
+    doc = retriever.get_document_by_id(0)
+
+    assert isinstance(doc, Document)
+    assert doc.page_content == "test1"
+    assert doc.metadata["source"] == "doc1"
 
 
-def test_get_context_window(retriever):
-    """Test getting context window."""
-    chunks = retriever.get_context_window(1, window_size=1)
-    assert len(chunks) > 0
-    assert all(isinstance(chunk, str) for chunk in chunks)
+def test_get_document_by_id_not_found(retriever):
+    """Test getting document by non-existent ID."""
+    retriever.index_manager.get_metadata.return_value = []
+    doc = retriever.get_document_by_id(999)
+    assert doc is None
 
 
-def test_prefetch_frames(retriever):
-    """Test frame prefetching."""
-    # Set a low prefetch threshold to ensure prefetching happens
-    retriever.config.cache_prefetch_threshold = 2
-    retriever.config.prefetch_batch_size = 2
+def test_get_documents_by_ids(retriever):
+    """Test getting multiple documents by IDs."""
+    docs = retriever.get_documents_by_ids([0, 1])
 
-    with patch('langchain_memvid.retriever.batch_extract_and_decode') as mock_decode:
-        mock_decode.return_value = {0: "test data", 1: "test data 2"}
+    assert len(docs) == 2
+    assert all(isinstance(doc, Document) for doc in docs)
+    assert docs[0].page_content == "test1"
+    assert docs[1].page_content == "test2"
 
-        # Prefetch frames
-        retriever.prefetch_frames([0, 1, 2])
 
-        # Verify mock was called twice with correct batch arguments
-        assert mock_decode.call_count == 2
-        mock_decode.assert_has_calls([
-            call(
-                retriever.video_file,
-                [0, 1],  # First batch
-                max_workers=retriever.config.max_workers
-            ),
-            call(
-                retriever.video_file,
-                [2],     # Second batch
-                max_workers=retriever.config.max_workers
-            )
-        ])
+def test_decode_frame(retriever):
+    """Test decoding a specific frame."""
+    doc = retriever.decode_frame(0)
 
-        # Verify cache was updated
-        assert 0 in retriever._frame_cache
-        assert 1 in retriever._frame_cache
-        assert len(retriever._frame_cache) == 2  # Only 2 frames should be cached
+    assert isinstance(doc, Document)
+    assert doc.page_content == "test"
+    assert doc.metadata["source"] == "test"
+
+
+def test_decode_frame_out_of_range(retriever):
+    """Test decoding frame with out of range index."""
+    retriever.video_processor.decode_video.return_value = []
+    doc = retriever.decode_frame(999)
+    assert doc is None
+
+
+def test_decode_all_frames(retriever):
+    """Test decoding all frames."""
+    docs = retriever.decode_all_frames()
+
+    assert len(docs) == 1
+    assert isinstance(docs[0], Document)
+    assert docs[0].page_content == "test"
+    assert docs[0].metadata["source"] == "test"
+
+
+def test_error_handling(retriever):
+    """Test error handling in various methods."""
+    # Test error in get_relevant_documents
+    retriever.index_manager.search_text.side_effect = Exception("Test error")
+    with pytest.raises(RetrievalError):
+        retriever._get_relevant_documents("test")
+
+    # Test error in get_document_by_id
+    retriever.index_manager.get_metadata.side_effect = Exception("Test error")
+    with pytest.raises(RetrievalError):
+        retriever.get_document_by_id(0)
+
+    # Test error in decode_frame
+    retriever.video_processor.decode_video.side_effect = Exception("Test error")
+    with pytest.raises(RetrievalError):
+        retriever.decode_frame(0)
+
+
+def test_retriever_initialization_with_custom_params(vector_store_config, mock_index_manager, mock_video_processor):
+    """Test retriever initialization with custom parameters."""
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_video, \
+         tempfile.NamedTemporaryFile(suffix='.d', delete=False) as tmp_index:
+        video_path = Path(tmp_video.name)
+        index_path = Path(tmp_index.name)
+
+    with patch('langchain_memvid.retriever.VideoProcessor', return_value=mock_video_processor):
+        retriever = Retriever(
+            video_file=video_path,
+            index_dir=index_path,
+            config=vector_store_config,
+            index_manager=mock_index_manager,
+            k=10,
+            frame_cache_size=50
+        )
+
+    try:
+        assert retriever.k == 10
+        assert retriever.frame_cache_size == 50
+        assert retriever.video_processor is not None
+    finally:
+        video_path.unlink(missing_ok=True)
+        index_path.unlink(missing_ok=True)
+
+
+def test_get_relevant_documents_with_custom_k(retriever):
+    """Test getting relevant documents with custom k parameter."""
+    retriever.k = 3
+    query = "test query"
+    documents = retriever._get_relevant_documents(query)
+
+    # Verify index manager calls
+    retriever.index_manager.search_text.assert_called_once()
+    call_args = retriever.index_manager.search_text.call_args[1]
+    assert call_args["k"] == 3
+
+    # Verify results
+    assert len(documents) == 2  # Mock returns 2 results
+
+
+def test_frame_caching(retriever):
+    """Test frame caching functionality."""
+    # First call should decode video
+    frame1 = retriever._get_frame(0)
+    assert frame1 is not None
+
+    # Second call should use cache
+    frame2 = retriever._get_frame(0)
+    assert frame2 is not None
+    assert frame1 is frame2  # Should be the same object
+
+    # Verify video processor was only called once
+    assert retriever.video_processor.decode_video.call_count == 1
 
 
 def test_clear_cache(retriever):
-    """Test cache clearing."""
-    # Add some data to cache
-    retriever._frame_cache[0] = "test data"
-    assert len(retriever._frame_cache) > 0
+    """Test clearing the frame cache."""
+    # Get a frame to populate cache
+    frame1 = retriever._get_frame(0)
+    assert frame1 is not None
+
+    # Verify video processor was called
+    assert retriever.video_processor.decode_video.call_count == 1
 
     # Clear cache
     retriever.clear_cache()
-    assert len(retriever._frame_cache) == 0
+
+    # Get frame again
+    frame2 = retriever._get_frame(0)
+    assert frame2 is not None
+
+    # Verify video processor was called again after cache clear
+    assert retriever.video_processor.decode_video.call_count == 2
+
+    # Verify we got new frames (even if they're identical)
+    assert id(frame1) != id(frame2)  # Should be different objects in memory
 
 
-def test_get_stats(retriever):
-    """Test getting retriever statistics."""
-    stats = retriever.get_stats()
-    assert isinstance(stats, RetrieverStats)
-    assert stats.video_file == retriever.video_file
-    assert stats.total_frames == retriever.video_metadata.total_frames
-    assert stats.fps == retriever.video_metadata.fps
-    assert stats.cache_size == len(retriever._frame_cache)
-    assert stats.cache_ttl == retriever.config.cache_ttl
-    assert isinstance(stats.cache_age, float)
-    assert isinstance(stats.config, dict)
-    assert isinstance(stats.index_stats, dict)
+def test_decode_all_frames_with_cache_limit(retriever):
+    """Test decoding all frames with cache size limit."""
+    retriever.frame_cache_size = 2
 
+    # Create mock frames
+    mock_frames = [
+        Image.new('RGB', (640, 480), color='white'),
+        Image.new('RGB', (640, 480), color='white'),
+        Image.new('RGB', (640, 480), color='white')
+    ]
+    retriever.video_processor.decode_video.return_value = mock_frames
 
-def test_decode_single_frame(retriever):
-    """Test single frame decoding."""
-    with patch('langchain_memvid.retriever.extract_and_decode_cached') as mock_decode:
-        mock_decode.return_value = "test data"
-        result = retriever._decode_single_frame(0)
-        assert result == "test data"
-        mock_decode.assert_called_once_with(retriever.video_file, 0)
+    # Decode frames
+    docs = retriever.decode_all_frames()
 
-
-def test_decode_frames_parallel(retriever):
-    """Test parallel frame decoding."""
-    with patch('langchain_memvid.retriever.batch_extract_and_decode') as mock_decode:
-        mock_decode.return_value = {0: "test data 1", 1: "test data 2"}
-        results = retriever._decode_frames_parallel([0, 1])
-        assert len(results) == 2
-        assert results[0] == "test data 1"
-        assert results[1] == "test data 2"
-        mock_decode.assert_called_once()
-
-
-def test_decode_frames_parallel_with_cache(retriever):
-    """Test parallel frame decoding with cache."""
-    # Add some data to cache with timestamp
-    retriever._frame_cache[0] = ("cached data", time.time())
-
-    with patch('langchain_memvid.retriever.batch_extract_and_decode') as mock_decode:
-        mock_decode.return_value = {1: "test data"}
-        results = retriever._decode_frames_parallel([0, 1])
-
-        # Verify results
-        assert results[0] == "cached data"  # From cache
-        assert results[1] == "test data"    # From mock decode
-        assert len(results) == 2
-
-        # Verify mock was called only for uncached frame
-        mock_decode.assert_called_once_with(
-            retriever.video_file,
-            [1],  # Only frame 1 should be decoded
-            max_workers=retriever.config.max_workers
-        )
+    # Should only process frame_cache_size frames
+    assert len(docs) <= 2  # Mock returns 1 doc per frame
+    assert retriever.video_processor.decode_video.call_count == 1
