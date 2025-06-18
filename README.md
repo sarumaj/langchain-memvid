@@ -46,56 +46,108 @@ pip install langchain-memvid[all]
 
 ```python
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_memvid import VectorStore, VectorStoreConfig
+from langchain_memvid import VectorStore
 
 # Initialize vector store
-vs_cfg = VectorStoreConfig()
 embeddings = HuggingFaceEmbeddings()
-vs = VectorStore(
-    video_file="output.mp4",
-    index_file="index.json",
+vs = VectorStore.from_texts(
+    texts=["Important fact 1", "Important fact 2", "Historical event details"],
     embedding=embeddings,
-    config=vs_cfg
+    video_file="knowledge_base.mp4",
+    index_dir="knowledge_base_index.d",
+    metadatas=[
+        {"id": 0, "source": "doc1.txt", "category": "facts"},
+        {"id": 1, "source": "doc1.txt", "category": "facts"},
+        {"id": 2, "source": "doc2.txt", "category": "history"}
+    ]
 )
 
-# Add text chunks
-chunks = ["Important fact 1", "Important fact 2", "Historical event details"]
-vs.add_texts(chunks)
-
 # Search for similar content
-results = vs.similarity_search("machine learning algorithms", top_k=3)
+results = vs.similarity_search("query", k=2)
 ```
+
+## Example Notebooks
+
+To help you get started, we provide two comprehensive Jupyter notebooks in the `examples` directory:
+
+1. `quickstart.ipynb` - A basic tutorial demonstrating core functionality and common use cases
+2. `advanced.ipynb` - An in-depth guide covering advanced features and customization options
+
+These notebooks provide hands-on examples and detailed explanations of the library's capabilities.
 
 ## Advanced Usage
 
 For more granular control, you can use the individual components:
 
 ```python
-from langchain_memvid.index import IndexManager, IndexConfig
-from langchain_memvid.retriever import Retriever, RetrieverConfig
-from langchain_memvid.encoder import Encoder, EncoderConfig
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_memvid import (
+    Encoder,
+    IndexConfig,
+    IndexManager,
+    QRCodeConfig,
+    VideoConfig,
+    Retriever,
+    VectorStoreConfig
+)
+from langchain_memvid.video import VideoProcessor
+from pathlib import Path
 
 # Initialize components
-config = IndexConfig(index_type="Flat")
+config = IndexConfig(
+    index_type="faiss",
+    metric="cosine",
+    nlist=6  # Number of clusters for IVF index
+)
 embeddings = HuggingFaceEmbeddings()
 index_manager = IndexManager(config=config, embeddings=embeddings)
 
-# Add and search chunks
-chunks = ["text chunk 1", "text chunk 2"]
-frame_numbers = [1, 2]
-chunk_ids = index_manager.add_chunks(chunks, frame_numbers)
-results = index_manager.search("query", top_k=5)
+# Add texts with metadata
+texts = ["text chunk 1", "text chunk 2"]
+metadata = [
+    {"id": 0, "source": "doc1.txt", "category": "example"},
+    {"id": 1, "source": "doc1.txt", "category": "example"}
+]
+index_manager.add_texts(texts, metadata)
 
-# Encode to video
-enc_cfg = EncoderConfig()
-encoder = Encoder(enc_cfg, index_manager)
-encoder.add_chunks(chunks)
-encoder.build_video(output_file="output.mp4", index_file="index.json")
+# Configure video processing
+video_config = VideoConfig(
+    fps=30,
+    resolution=(1920, 1080),
+    codec="mp4v"
+)
+qrcode_config = QRCodeConfig(
+    error_correction="H",
+    box_size=10,
+    border=4
+)
 
-# Retrieve from video
-ret_cfg = RetrieverConfig()
-retriever = Retriever("output.mp4", "index.json", ret_cfg, index_manager)
-results = retriever.search_with_metadata("query", top_k=3)
+# Create video processor and encoder
+video_processor = VideoProcessor(
+    video_config=video_config,
+    qrcode_config=qrcode_config
+)
+encoder = Encoder(video_processor, index_manager)
+
+# Build video with encoded data
+video_file = Path("output.mp4")
+index_dir = Path("index.d")
+encoder.build_video(video_file, index_dir)
+
+# Initialize retriever for searching
+retriever = Retriever(
+    video_file=video_file,
+    index_dir=index_dir,
+    config=VectorStoreConfig(
+        video=video_config,
+        qrcode=qrcode_config
+    ),
+    index_manager=index_manager,
+    k=2
+)
+
+# Search for similar content
+results = retriever.retrieve("query")
 ```
 
 ## Requirements
@@ -133,5 +185,3 @@ For the original license texts and more information, please refer to the respect
 - [OpenCV](https://opencv.org/) for video processing capabilities
 - [QRCode](https://github.com/lincolnloop/python-qrcode) for QR code generation
 - [Pydantic](https://github.com/pydantic/pydantic) for data validation
-- [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) for HTML parsing
-- [EbookLib](https://github.com/aerkalov/ebooklib) for EPUB handling
