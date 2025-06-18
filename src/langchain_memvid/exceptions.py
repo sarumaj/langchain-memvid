@@ -1,10 +1,10 @@
 """
-Custom exceptions for the MemVid package.
+Custom exceptions for the LangChain MemVid package.
 """
 
 
 class MemVidError(Exception):
-    """Base exception class for all MemVid-related errors."""
+    """Base exception class for all LangChain MemVid-related errors."""
     pass
 
 
@@ -20,11 +20,6 @@ class RetrievalError(MemVidError):
 
 class MemVidIndexError(MemVidError):
     """Raised when there is an error with the index operations."""
-    pass
-
-
-class ConfigurationError(MemVidError):
-    """Raised when there is an error in the configuration."""
     pass
 
 

@@ -7,15 +7,15 @@ This module provides FFmpeg-based video processing functionality.
 import subprocess
 from pathlib import Path
 from typing import List, Generator, Optional, Dict, Any
-import logging
 from PIL import Image
 import tempfile
 import numpy as np
 
 from ..exceptions import VideoProcessingError
 from .codecs import get_codec_parameters, CodecParameters
+from ..logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("video")
 
 
 class FFmpegProcessor:
@@ -51,7 +51,7 @@ class FFmpegProcessor:
             # Convert dict to CodecParameters for validation
             override_params = CodecParameters(**ffmpeg_options)
             # Update only the provided fields
-            for field in override_params.model_fields:
+            for field in override_params.__class__.model_fields:
                 if field in ffmpeg_options:
                     setattr(self.codec_params, field, ffmpeg_options[field])
 

@@ -1,5 +1,5 @@
 """
-Retriever module for MemVid.
+Retriever module for LangChain MemVid.
 
 This module provides functionality for retrieving documents from video storage
 using semantic search and QR code decoding.
@@ -8,22 +8,23 @@ using semantic search and QR code decoding.
 from pathlib import Path
 from typing import List, Any, Optional, Dict, Union
 import orjson
-import logging
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr
+from tqdm import tqdm
 
 from .exceptions import RetrievalError
 from .video import VideoProcessor
 from .index import IndexManager
 from .config import VectorStoreConfig
+from .logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("retriever")
 
 
 class Retriever(BaseRetriever, BaseModel):
-    """Retriever for MemVid vector store."""
+    """Retriever for LangChain MemVid vector store."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -34,7 +35,7 @@ class Retriever(BaseRetriever, BaseModel):
     )
 
     video_file: Path = Field(description="Path to the video file")
-    index_file: Path = Field(description="Path to the index file")
+    index_dir: Path = Field(description="Path to the index directory")
     config: VectorStoreConfig = Field(description="Configuration for the retriever")
     index_manager: Union[IndexManager, Any] = Field(description="Index manager for vector search")
     video_processor: Union[VideoProcessor, Any] = Field(description="Video processor for video decoding", default=None)
@@ -62,7 +63,7 @@ class Retriever(BaseRetriever, BaseModel):
 
             # Load index if requested
             if self.load_index:
-                self.index_manager.load(self.index_file)
+                self.index_manager.load(self.index_dir)
 
             logger.info(f"Initialized retriever with video: {self.video_file}")
 
@@ -119,7 +120,7 @@ class Retriever(BaseRetriever, BaseModel):
             List of document lists, one for each input
         """
         results = []
-        for _input in inputs:
+        for _input in tqdm(inputs, desc="Processing batch queries"):
             try:
                 results.append(self.retrieve(_input))
             except Exception as e:
@@ -181,20 +182,33 @@ class Retriever(BaseRetriever, BaseModel):
             # Use IndexManager's search_text method which leverages FAISS capabilities
             results = self.index_manager.search_text(query, k=self.k)
 
-            # Convert SearchResult objects to Documents
+            # Convert SearchResult objects to Documents with progress bar if more than 10 results
             documents = []
-            for result in results:
-                # Create document with the text and metadata
-                doc = Document(
-                    page_content=result.text,
-                    metadata={
-                        "source": result.source,
-                        "category": result.category,
-                        "similarity": result.similarity,
-                        **(result.metadata or {})
-                    }
-                )
-                documents.append(doc)
+            if len(results) > 10:
+                for result in tqdm(results, desc="Processing search results"):
+                    # Create document with the text and metadata
+                    doc = Document(
+                        page_content=result.text,
+                        metadata={
+                            "source": result.source,
+                            "category": result.category,
+                            "similarity": result.similarity,
+                            **(result.metadata or {})
+                        }
+                    )
+                    documents.append(doc)
+            else:
+                for result in results:
+                    doc = Document(
+                        page_content=result.text,
+                        metadata={
+                            "source": result.source,
+                            "category": result.category,
+                            "similarity": result.similarity,
+                            **(result.metadata or {})
+                        }
+                    )
+                    documents.append(doc)
 
             return documents
 
@@ -244,14 +258,22 @@ class Retriever(BaseRetriever, BaseModel):
             # Get metadata for all IDs
             metadata_list = self.index_manager.get_metadata(doc_ids)
 
-            # Create documents
+            # Create documents with progress bar if more than 10 documents
             documents = []
-            for metadata in metadata_list:
-                doc = Document(
-                    page_content=metadata["text"],
-                    metadata=metadata["metadata"]
-                )
-                documents.append(doc)
+            if len(metadata_list) > 10:
+                for metadata in tqdm(metadata_list, desc="Processing documents"):
+                    doc = Document(
+                        page_content=metadata["text"],
+                        metadata=metadata["metadata"]
+                    )
+                    documents.append(doc)
+            else:
+                for metadata in metadata_list:
+                    doc = Document(
+                        page_content=metadata["text"],
+                        metadata=metadata["metadata"]
+                    )
+                    documents.append(doc)
 
             return documents
 

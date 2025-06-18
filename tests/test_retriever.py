@@ -122,7 +122,7 @@ def retriever(vector_store_config, mock_index_manager, mock_video_processor):
     with patch('langchain_memvid.retriever.VideoProcessor', return_value=mock_video_processor):
         retriever = Retriever(
             video_file=video_path,
-            index_file=index_path,
+            index_dir=index_path,
             config=vector_store_config,
             index_manager=mock_index_manager
         )
@@ -243,7 +243,7 @@ def test_retriever_initialization_with_custom_params(vector_store_config, mock_i
     with patch('langchain_memvid.retriever.VideoProcessor', return_value=mock_video_processor):
         retriever = Retriever(
             video_file=video_path,
-            index_file=index_path,
+            index_dir=index_path,
             config=vector_store_config,
             index_manager=mock_index_manager,
             k=10,

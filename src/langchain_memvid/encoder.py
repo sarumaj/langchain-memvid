@@ -1,5 +1,5 @@
 """
-Encoder module for MemVid.
+Encoder module for LangChain MemVid.
 
 This module provides functionality for encoding text chunks into QR codes
 and managing the encoding process.
@@ -17,7 +17,7 @@ from .video import VideoProcessor
 from .index import IndexManager
 from .config import VectorStoreConfig
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"langchain_memvid.{__name__}")
 
 
 @dataclass
@@ -96,14 +96,14 @@ class Encoder:
     def build_video(
         self,
         output_file: Path,
-        index_file: Path,
+        index_dir: Path,
         **kwargs: Any,
     ) -> BuildStats:
         """Build video from added chunks.
 
         Args:
             output_file: Path to save the video file
-            index_file: Path to save the index file
+            index_dir: Path to save the index directory
             **kwargs: Additional arguments for video building
 
         Returns:
@@ -121,8 +121,8 @@ class Encoder:
             # Validate paths
             if not output_file.parent.exists():
                 raise ValueError(f"Output directory does not exist: {output_file.parent}")
-            if not index_file.parent.exists():
-                raise ValueError(f"Index directory does not exist: {index_file.parent}")
+            if not index_dir.parent.exists():
+                raise ValueError(f"Index directory does not exist: {index_dir.parent}")
 
             if not self._chunks:
                 raise EncodingError("No chunks to encode")
@@ -154,7 +154,7 @@ class Encoder:
             )
 
             # Save index
-            index_dir = index_file.with_suffix('.d')
+            index_dir = index_dir.with_suffix('.d')
             self.index_manager.save(index_dir)
 
             # Calculate statistics

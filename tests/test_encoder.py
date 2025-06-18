@@ -93,7 +93,7 @@ def test_build_video_success(encoder, tmp_path):
     encoder.add_chunks(texts, metadatas)
 
     output_file = tmp_path / "output.mp4"
-    index_file = tmp_path / "index.json"
+    index_dir = tmp_path / "index.d"
 
     # Create mock output file
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -116,7 +116,7 @@ def test_build_video_success(encoder, tmp_path):
     encoder.video_processor.encode_video = Mock(side_effect=mock_encode_video)
 
     # Execute
-    stats = encoder.build_video(output_file, index_file)
+    stats = encoder.build_video(output_file, index_dir)
 
     # Verify
     assert stats.total_chunks == 2
@@ -131,15 +131,15 @@ def test_build_video_success(encoder, tmp_path):
 
     # Verify index manager calls
     encoder.index_manager.add_texts.assert_called_once()
-    encoder.index_manager.save.assert_called_once_with(index_file.with_suffix(".d"))
+    encoder.index_manager.save.assert_called_once_with(index_dir.with_suffix(".d"))
 
 
 def test_build_video_no_chunks(encoder, tmp_path):
     output_file = tmp_path / "output.mp4"
-    index_file = tmp_path / "index.json"
+    index_dir = tmp_path / "index.d"
 
     with pytest.raises(EncodingError, match="No chunks to encode"):
-        encoder.build_video(output_file, index_file)
+        encoder.build_video(output_file, index_dir)
 
 
 def test_build_video_handles_errors(encoder, tmp_path):
@@ -148,10 +148,10 @@ def test_build_video_handles_errors(encoder, tmp_path):
     encoder.add_chunks(texts)
 
     output_file = tmp_path / "output.mp4"
-    index_file = tmp_path / "index.json"
+    index_dir = tmp_path / "index.d"
 
     # Mock video processor to raise an error
     encoder.video_processor.create_qr_code = Mock(side_effect=Exception("Test error"))
 
     with pytest.raises(EncodingError, match="Failed to build video"):
-        encoder.build_video(output_file, index_file)
+        encoder.build_video(output_file, index_dir)

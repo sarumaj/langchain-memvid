@@ -1,13 +1,13 @@
 """
-Configuration management for MemVid.
+Configuration management for LangChain MemVid.
 
-This module provides configuration classes for different components of the MemVid system.
+This module provides configuration classes for different components of the LangChain MemVid system.
 Each configuration class is a Pydantic model that provides validation and documentation.
 """
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 
 class VideoBackend(str, Enum):
@@ -26,37 +26,37 @@ class VideoConfig(BaseModel):
 
     fps: int = Field(
         default=30,
-        description="Frames per second for the output video",
+        description="Frames per second for video encoding",
         ge=1,
         le=60
     )
 
-    resolution: tuple[int, int] = Field(
+    resolution: Tuple[int, int] = Field(
         default=(1920, 1080),
         description="Video resolution (width, height)"
     )
 
-    # Optional backend override
     backend: Optional[VideoBackend] = Field(
         default=None,
-        description=(
-            "Optional override for video processing backend. "
-            "If not set, backend will be selected based on codec."
-        )
+        description="Video processing backend to use"
     )
 
-    # FFmpeg specific options
     ffmpeg_options: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Additional FFmpeg options"
     )
 
+    show_progress: bool = Field(
+        default=True,
+        description="Whether to show progress bars during operations"
+    )
+
     @field_validator("resolution", mode="before")
     def validate_resolution(cls, v):
         width, height = v
-        if width < 640 or height < 480:
+        if width < 640 or height < 480:     # at least SD (16:9)
             raise ValueError("Resolution too low")
-        if width > 3840 or height > 2160:
+        if width > 3840 or height > 2160:   # at most 4K (16:9)
             raise ValueError("Resolution too high")
         return v
 
@@ -82,17 +82,24 @@ class QRCodeConfig(BaseModel):
     )
 
     box_size: int = Field(
-        default=10,
+        default=5,
         description="Size of each QR code box in pixels",
         ge=1,
         le=50
     )
 
     border: int = Field(
-        default=4,
+        default=3,
         description="Border size in boxes",
         ge=0,
         le=10
+    )
+
+    version: int = Field(
+        default=35,
+        description="Version of the QR code (the higher the version, the more data can be encoded)",
+        ge=1,
+        le=40
     )
 
 
@@ -101,7 +108,7 @@ class IndexConfig(BaseModel):
 
     index_type: str = Field(
         default="faiss",
-        description="Type of index to use (faiss, annoy, etc.)"
+        description="Type of vector index to use"
     )
 
     metric: str = Field(
@@ -114,6 +121,11 @@ class IndexConfig(BaseModel):
         default=100,
         description="Number of clusters for FAISS index",
         ge=1
+    )
+
+    show_progress: bool = Field(
+        default=True,
+        description="Whether to show progress bars during operations"
     )
 
 

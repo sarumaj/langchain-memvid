@@ -1,7 +1,7 @@
 """
-Vector index management for MemVid.
+Vector index management for LangChain MemVid.
 
-This module provides functionality for managing vector indices used in MemVid,
+This module provides functionality for managing vector indices used in LangChain MemVid,
 including FAISS index creation, updating, and searching.
 """
 
@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 import orjson
-import logging
 
 from .exceptions import MemVidIndexError
 from .config import IndexConfig
+from .utils import ProgressDisplay
+from .logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("index")
 
 
 @dataclass
@@ -77,6 +78,7 @@ class IndexManager:
         self._is_trained: bool = False
         self._dimension: Optional[int] = None
         self._min_points: Optional[int] = None
+        self._progress = ProgressDisplay(show_progress=config.show_progress)
 
     def create_index(self) -> None:
         """Create a new FAISS index.
@@ -143,8 +145,11 @@ class IndexManager:
             if self._index is None:
                 self.create_index()
 
-            # Convert texts to vectors using embeddings
-            vectors = np.array(self.embeddings.embed_documents(texts), dtype='float32')
+            # Convert texts to vectors using embeddings with progress bar
+            logger.info(f"Embedding {len(texts)} texts...")
+            with self._progress.progress(total=1, desc="Embedding texts") as pbar:
+                vectors = np.array(self.embeddings.embed_documents(texts), dtype='float32')
+                pbar.update(1)
 
             # Use empty metadata if none provided
             if metadata is None:
@@ -160,7 +165,7 @@ class IndexManager:
 
             # Filter out duplicates and keep track of which texts to add
             unique_indices = []
-            for i, text in enumerate(texts):
+            for i, text in self._progress.tqdm(enumerate(texts), desc="Deduplicating texts", total=len(texts)):
                 if text not in text_to_idx:
                     unique_indices.append(i)
                     text_to_idx[text] = len(self._metadata) + len(unique_indices) - 1
@@ -179,31 +184,51 @@ class IndexManager:
                 and not isinstance(self._index, faiss.IndexIVFFlat)
                 and self._index.ntotal + len(unique_vectors) >= self._min_points
             ):
+                logger.info("Converting to IVF index...")
                 # Create IVF index
                 quantizer = self._index
+                metric = (
+                    faiss.METRIC_INNER_PRODUCT if self.config.metric == "cosine"
+                    else faiss.METRIC_L2
+                )
                 self._index = faiss.IndexIVFFlat(
                     quantizer,
                     self._dimension,
                     self.config.nlist,
-                    faiss.METRIC_INNER_PRODUCT if self.config.metric == "cosine"
-                    else faiss.METRIC_L2
+                    metric
                 )
 
-                # Get all existing vectors
-                all_vectors = np.zeros((self._index.ntotal, self._dimension), dtype='float32')
-                self._index.reconstruct_n(0, self._index.ntotal, all_vectors)
+                # Get all existing vectors with progress bar
+                batch_size = 1000
+                all_vectors = np.zeros(
+                    (self._index.ntotal, self._dimension),
+                    dtype='float32'
+                )
+                for i in self._progress.tqdm(
+                    range(0, self._index.ntotal, batch_size),
+                    desc="Reconstructing vectors"
+                ):
+                    end_idx = min(i + batch_size, self._index.ntotal)
+                    self._index.reconstruct_n(i, end_idx - i, all_vectors[i:end_idx])
 
                 # Train the index
+                logger.info("Training IVF index...")
                 self._index.train(all_vectors)
                 self._is_trained = True
 
-                # Add back the vectors
-                self._index.add(all_vectors)
+                # Add back the vectors with progress bar
+                for i in self._progress.tqdm(
+                    range(0, len(all_vectors), batch_size),
+                    desc="Adding vectors to IVF index"
+                ):
+                    batch = all_vectors[i:i + batch_size]
+                    self._index.add(batch)
                 logger.info(f"Converted to IVF index and trained with {self._index.ntotal} points")
 
             # Check if IVF index needs training
             if isinstance(self._index, faiss.IndexIVFFlat) and not self._is_trained:
                 # Train the index with these vectors
+                logger.info("Training IVF index...")
                 self._index.train(unique_vectors)
                 self._is_trained = True
 
@@ -211,8 +236,11 @@ class IndexManager:
             if self.config.metric == "cosine":
                 faiss.normalize_L2(unique_vectors)
 
-            # Add vectors to index
-            self._index.add(unique_vectors)
+            # Add vectors to index in batches with progress bar
+            batch_size = 1000
+            for i in self._progress.tqdm(range(0, len(unique_vectors), batch_size), desc="Adding vectors to index"):
+                batch = unique_vectors[i:i + batch_size]
+                self._index.add(batch)
             self._metadata.extend(unique_metadata)
 
             logger.info(f"Added {len(unique_vectors)} unique texts to index")
@@ -317,12 +345,24 @@ class IndexManager:
             MemVidIndexError: If loading fails
         """
         try:
+            if not path.exists() and not path.is_dir():
+                raise FileNotFoundError(f"Path {path} does not exist or is not a directory")
+
+            index_file = path / "index.faiss"
+            metadata_file = path / "metadata.json"
+
+            if not index_file.exists():
+                raise FileNotFoundError(f"Index file not found at {index_file}")
+
+            if not metadata_file.exists():
+                raise FileNotFoundError(f"Metadata file not found at {metadata_file}")
+
             # Load FAISS index
-            self._index = faiss.read_index(str(path / "index.faiss"))
+            self._index = faiss.read_index(str(index_file))
             self._dimension = self._index.d
 
             # Load metadata
-            with open(path / "metadata.json", "rb") as f:
+            with open(metadata_file, "rb") as f:
                 self._metadata = orjson.loads(f.read())
 
             logger.info(f"Loaded index from {path}")

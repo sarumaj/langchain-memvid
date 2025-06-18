@@ -8,19 +8,27 @@ of QR codes in video format.
 import cv2
 import numpy as np
 from pathlib import Path
-from typing import List, Generator
+from typing import List, Generator, NamedTuple, Iterable
 import qrcode
 from qrcode.image.base import BaseImage
 from PIL import Image
-import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from ..exceptions import VideoProcessingError, QRCodeError
 from ..config import VideoConfig, QRCodeConfig, VideoBackend
+from ..utils import ProgressDisplay
+from ..logging import get_logger
 from .ffmpeg import FFmpegProcessor
 from .codecs import get_codec_parameters
 
-logger = logging.getLogger(__name__)
+logger = get_logger("video")
+
+
+class QRCodeDetection(NamedTuple):
+    retval: bool
+    decoded_info: List[str]
+    points: List[List[int]]
+    straight_qrcode: np.ndarray
 
 
 class VideoProcessor:
@@ -40,6 +48,7 @@ class VideoProcessor:
         self.video_config = video_config
         self.qrcode_config = qrcode_config
         self._qr = qrcode.QRCode(
+            version=qrcode_config.version,
             error_correction=getattr(qrcode.constants, f"ERROR_CORRECT_{qrcode_config.error_correction}"),
             box_size=qrcode_config.box_size,
             border=qrcode_config.border
@@ -64,6 +73,9 @@ class VideoProcessor:
             )
         else:
             self._video_processor = None  # Use OpenCV methods directly
+
+        # Initialize progress display
+        self._progress = ProgressDisplay(show_progress=video_config.show_progress)
 
     def _validate_output_path(self, output_path: Path) -> Path:
         """Validate and adjust output path based on codec file type.
@@ -112,6 +124,7 @@ class VideoProcessor:
             self._qr.add_data(data)
             self._qr.make(fit=True)
             return self._qr.make_image(fill_color="black", back_color="white")
+
         except Exception as e:
             raise QRCodeError(f"Failed to create QR code: {str(e)}")
 
@@ -141,18 +154,20 @@ class VideoProcessor:
 
         # Convert frame to numpy array and paste it
         frame_np = np.array(frame)
-        if frame.mode == '1':
-            frame_np = frame_np.astype(np.uint8) * 255
-            frame_np = cv2.cvtColor(frame_np, cv2.COLOR_GRAY2BGR)
-        elif frame.mode == 'RGB':
-            frame_np = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
+        match frame.mode:
+            case '1':
+                frame_np = frame_np.astype(np.uint8) * 255
+                frame_np = cv2.cvtColor(frame_np, cv2.COLOR_GRAY2BGR)
+            case 'RGB':
+                frame_np = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
+            case _:
+                raise ValueError(f"Unsupported frame mode: {frame.mode}")
 
         # Paste the frame onto the background
         frame_array[y:y+new_size[1], x:x+new_size[0]] = frame_np
-
         return frame_array
 
-    def _prepare_frames_batch(self, frames: List[Image.Image]) -> List[np.ndarray]:
+    def _prepare_frames_batch(self, frames: Iterable[Image.Image]) -> Generator[np.ndarray, None, None]:
         """Prepare a batch of frames for video encoding.
 
         Args:
@@ -162,11 +177,15 @@ class VideoProcessor:
             List of OpenCV-compatible numpy arrays
         """
         with ThreadPoolExecutor() as executor:
-            return list(executor.map(self._prepare_frame, frames))
+            # Convert to list to get length for progress bar
+            frames_list = list(frames)
+            futures = list(executor.map(self._prepare_frame, frames_list))
+            for future in self._progress.tqdm(futures, desc="Preparing frames", total=len(frames_list)):
+                yield future
 
     def encode_video(
         self,
-        frames: List[Image.Image],
+        frames: Iterable[Image.Image],
         output_path: Path,
     ) -> None:
         """Encode frames into a video file.
@@ -186,29 +205,34 @@ class VideoProcessor:
             output_path = self._validate_output_path(output_path)
 
             if self._video_processor is not None:
-                # Use FFmpeg backend
                 self._video_processor.encode_video(frames, output_path)
-            else:
-                # Use OpenCV backend
-                # Prepare all frames in parallel
-                prepared_frames = self._prepare_frames_batch(frames)
+                return
 
-                # Set up video writer with optimized parameters
-                fourcc = cv2.VideoWriter_fourcc(*self.video_config.codec)
-                out = cv2.VideoWriter(
-                    str(output_path),
-                    fourcc,
-                    self.video_config.fps,
-                    (self.width, self.height),
-                    isColor=True
-                )
+            # Convert frames to list to get total count
+            frames_list = list(frames)
+            total_frames = len(frames_list)
+            logger.info(f"Encoding {total_frames} frames to video...")
 
-                # Write frames
-                for frame in prepared_frames:
-                    out.write(frame)
+            # Use OpenCV backend
+            # Prepare all frames in parallel
+            prepared_frames = self._prepare_frames_batch(frames_list)
 
-                out.release()
-                logger.info(f"Video encoded successfully to {output_path}")
+            # Set up video writer with optimized parameters
+            fourcc = cv2.VideoWriter_fourcc(*self.video_config.codec)
+            out = cv2.VideoWriter(
+                str(output_path),
+                fourcc,
+                self.video_config.fps,
+                (self.width, self.height),
+                isColor=True
+            )
+
+            # Write frames with progress bar
+            for frame in self._progress.tqdm(prepared_frames, desc="Writing video", total=total_frames):
+                out.write(frame)
+
+            out.release()
+            logger.info(f"Video encoded successfully to {output_path}")
 
         except Exception as e:
             raise VideoProcessingError(f"Failed to encode video: {str(e)}")
@@ -230,24 +254,29 @@ class VideoProcessor:
         """
         try:
             if self._video_processor is not None:
-                # Use FFmpeg backend
                 yield from self._video_processor.decode_video(video_path)
-            else:
-                # Use OpenCV backend
-                cap = cv2.VideoCapture(str(video_path))
-                if not cap.isOpened():
-                    raise VideoProcessingError(f"Failed to open video file: {video_path}")
+                return
 
+            # Use OpenCV backend
+            if not (cap := cv2.VideoCapture(str(video_path))).isOpened():
+                raise VideoProcessingError(f"Failed to open video file: {video_path}")
+
+            # Get total frame count for progress bar
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            logger.info(f"Decoding {total_frames} frames from video...")
+
+            with self._progress.progress(total=total_frames, desc="Decoding video") as pbar:
                 while True:
-                    ret, frame = cap.read()
-                    if not ret:
+                    retval, frame = cap.read()
+                    if not retval:
                         break
 
                     # Convert OpenCV frame to PIL Image
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     yield Image.fromarray(frame_rgb)
+                    pbar.update(1)
 
-                cap.release()
+            cap.release()
 
         except Exception as e:
             raise VideoProcessingError(f"Failed to decode video: {str(e)}")
@@ -269,21 +298,21 @@ class VideoProcessor:
         """
         try:
             # Convert PIL Image to OpenCV format
-            if frame.mode == '1':  # Binary image
-                frame = frame.convert('RGB')
+            match frame.mode:
+                case '1':       # Binary image
+                    frame = frame.convert('RGB')
+                case 'RGB':     # RGB image
+                    pass
+                case _:
+                    raise ValueError(f"Unsupported frame mode: {frame.mode}")
+
             frame_cv = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
 
             # Detect QR codes
             detector = cv2.QRCodeDetector()
-            retval, decoded_info, points, straight_qrcode = detector.detectAndDecodeMulti(frame_cv)
+            detection = QRCodeDetection(*detector.detectAndDecodeMulti(frame_cv))
 
-            # Keep for debugging
-            _ = (points, straight_qrcode)
-
-            if not retval:
-                return []
-
-            return [info for info in decoded_info if info]
+            return [info for info in detection.decoded_info if info] if detection.retval else []
 
         except Exception as e:
             raise QRCodeError(f"Failed to extract QR codes: {str(e)}")
