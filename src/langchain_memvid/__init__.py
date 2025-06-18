@@ -51,7 +51,6 @@ try:
     IPYTHON_INSTALLED = True
 except (ImportError, ModuleNotFoundError):
     IPYTHON_INSTALLED = False
-    raise
 
 if IPYTHON_INSTALLED:
     import shutil
@@ -73,8 +72,8 @@ if IPYTHON_INSTALLED:
                 return importlib.import_module(name)
             return None
 
-    chime = import_module('chime')
-    ipywidgets = import_module('ipywidgets')
+    chime = import_module('chime')              # required for chime (sound notification)
+    ipywidgets = import_module('ipywidgets')    # required for tqdm (progress bar)
 
     @magics_class
     class Watchdog(Magics):
@@ -249,12 +248,12 @@ if IPYTHON_INSTALLED:
 
     def load_ipython_extension(shell: InteractiveShell):
         """Load the IPython extension."""
-        global chime
+        global chime       # required for chime (sound notification)
         if not chime:
             chime = import_module('chime', shell)
             chime.theme('big-sur')
 
-        global ipywidgets
+        global ipywidgets  # required for tqdm (progress bar)
         if not ipywidgets:
             ipywidgets = import_module('ipywidgets', shell)
 
