@@ -24,7 +24,6 @@ dependencies = [
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
     "opencv-contrib-python==4.11.0.86",
-    "opencv-python==4.11.0.86",
     "orjson==3.10.18",
     "pydantic==2.11.7",
     "tqdm==4.67.1"
@@ -32,8 +31,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest==8.0.0",
-    "pytest-asyncio==0.23.5"
+    "pytest==8.4.1",
+    "pytest-asyncio==1.0.0",
+    "pytest-benchmark==5.1.0"
 ]
 
 [tool.setuptools.packages.find]
@@ -45,7 +45,9 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = [
     "-vv",
-    "--asyncio-mode=auto"
+    "--asyncio-mode=auto",
+    "--benchmark-disable",
+    "--benchmark-skip"
 ]
 filterwarnings = [
     "ignore:numpy.core._multiarray_umath is deprecated:DeprecationWarning:faiss.loader",

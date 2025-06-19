@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from .exceptions import EncodingError
 from .video import VideoProcessor
 from .index import IndexManager
-from .config import VectorStoreConfig
+from .config import VectorStoreConfig, LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE, LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 from .logging import get_logger
 
 logger = get_logger("encoder")
@@ -61,7 +61,7 @@ class Encoder:
         self,
         texts: List[str],
         metadatas: Optional[List[Dict[str, Any]]] = None,
-    ) -> None:
+    ):
         """Add text chunks for encoding.
 
         Args:
@@ -95,19 +95,17 @@ class Encoder:
 
     def build_video(
         self,
-        output_file: Path,
-        index_dir: Path,
-        **kwargs: Any,
+        output_file: Path = LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE,
+        index_dir: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR,
     ) -> BuildStats:
         """Build video from added chunks.
 
         Args:
-            output_file: Path to save the video file
-            index_dir: Path to save the index directory
-            **kwargs: Additional arguments for video building
+            output_file: Path to save the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+            index_dir: Path to save the index directory, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 
         Returns:
-            Dictionary with build statistics
+            BuildStats: Statistics for the video build process
 
         Raises:
             EncodingError: If video building fails
@@ -176,7 +174,7 @@ class Encoder:
         except Exception as e:
             raise EncodingError(f"Failed to build video: {str(e)}")
 
-    def clear(self) -> None:
+    def clear(self):
         """Clear all added chunks."""
         self._chunks = []
         logger.info("Cleared all chunks")

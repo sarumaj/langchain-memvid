@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import orjson
 
 from .exceptions import MemVidIndexError
-from .config import IndexConfig
+from .config import IndexConfig, LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 from .utils import ProgressDisplay
 from .logging import get_logger
 
@@ -80,7 +80,7 @@ class IndexManager:
         self._min_points: Optional[int] = None
         self._progress = ProgressDisplay(show_progress=config.show_progress)
 
-    def create_index(self) -> None:
+    def create_index(self):
         """Create a new FAISS index.
 
         The dimension is automatically determined from the embeddings model.
@@ -135,7 +135,7 @@ class IndexManager:
         self,
         texts: List[str],
         metadata: Optional[List[Dict[str, Any]]] = None,
-    ) -> None:
+    ):
         """Add texts to the index by converting them to vectors using embeddings.
 
         Args:
@@ -311,11 +311,11 @@ class IndexManager:
         except Exception as e:
             raise MemVidIndexError(f"Failed to get metadata: {str(e)}")
 
-    def save(self, path: Path) -> None:
+    def save(self, path: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR):
         """Save the index and metadata to disk.
 
         Args:
-            path: Path to save the index
+            path: Path to save the index, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 
         Raises:
             MemVidIndexError: If saving fails
@@ -339,11 +339,11 @@ class IndexManager:
         except Exception as e:
             raise MemVidIndexError(f"Failed to save index: {str(e)}")
 
-    def load(self, path: Path) -> None:
+    def load(self, path: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR):
         """Load the index and metadata from disk.
 
         Args:
-            path: Path to load the index from
+            path: Path to load the index from, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 
         Raises:
             MemVidIndexError: If loading fails

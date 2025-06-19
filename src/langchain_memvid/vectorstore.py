@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from .index import IndexManager
 from .encoder import Encoder
 from .retriever import Retriever
-from .config import VectorStoreConfig
+from .config import VectorStoreConfig, LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE, LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 from .utils import get_on_first_match
 from .logging import get_logger
 
@@ -32,8 +32,8 @@ class VectorStore(VectorStore):
     in a video file. It provides semantic search capabilities using FAISS index.
 
     Attributes:
-        video_file (str): Path to the video file storing QR codes
-        index_dir (str): Path to the index directory for semantic search
+        video_file (str): Path to the video file storing QR codes, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+        index_dir (str): Path to the index directory for semantic search, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
         encoder (Encoder): Encoder for converting documents to QR codes
         _retriever (Optional[Retriever]): Lazy-loaded retriever for searching and decoding QR codes
     """
@@ -41,16 +41,16 @@ class VectorStore(VectorStore):
     def __init__(
         self, *,
         embedding: Embeddings,
-        video_file: Path = Path("video.mp4"),
-        index_dir: Path = Path("index.d"),
+        video_file: Path = LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE,
+        index_dir: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR,
         config: Optional[VectorStoreConfig] = None,
     ):
         """Initialize VectorStore.
 
         Args:
-            video_file: Path to store/load the video file
-            index_dir: Path to store/load the index file
             embedding: Embedding model for semantic search
+            video_file: Path to store/load the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+            index_dir: Path to store/load the index file, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
             config: Optional unified configuration. If not provided, uses default configs
         """
         self.video_file = Path(video_file).absolute()
@@ -153,7 +153,7 @@ class VectorStore(VectorStore):
         Args:
             texts: List of text strings to add
             metadatas: Optional list of metadata dicts for each text
-            **kwargs: Additional arguments passed to the encoder
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of chunk IDs
@@ -173,7 +173,6 @@ class VectorStore(VectorStore):
             stats = self.encoder.build_video(
                 output_file=self.video_file,
                 index_dir=self.index_dir,
-                **kwargs
             )
 
             # Reload index in index manager after building
@@ -207,7 +206,7 @@ class VectorStore(VectorStore):
         Args:
             texts: List of text strings to add
             metadatas: Optional list of metadata dicts for each text
-            **kwargs: Additional arguments passed to the encoder
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of chunk IDs
@@ -232,7 +231,7 @@ class VectorStore(VectorStore):
 
         Args:
             documents: List of Document objects to add
-            **kwargs: Additional arguments passed to add_texts
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of chunk IDs
@@ -250,7 +249,7 @@ class VectorStore(VectorStore):
 
         Args:
             documents: List of Document objects to add
-            **kwargs: Additional arguments passed to add_texts
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of chunk IDs
@@ -270,7 +269,7 @@ class VectorStore(VectorStore):
         Args:
             query: Query text
             k: Number of results to return
-            **kwargs: Additional arguments passed to the retriever
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of Document objects
@@ -289,7 +288,7 @@ class VectorStore(VectorStore):
         Args:
             query: Query text
             k: Number of results to return
-            **kwargs: Additional arguments passed to the retriever
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of Document objects
@@ -312,7 +311,7 @@ class VectorStore(VectorStore):
         Args:
             query: Query text
             k: Number of results to return
-            **kwargs: Additional arguments passed to the retriever
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of (Document, score) tuples
@@ -337,7 +336,7 @@ class VectorStore(VectorStore):
         Args:
             query: Query text
             k: Number of results to return
-            **kwargs: Additional arguments passed to the retriever
+            **kwargs: Additional arguments (ignored)
 
         Returns:
             List of (Document, score) tuples
@@ -354,8 +353,8 @@ class VectorStore(VectorStore):
         cls,
         texts: List[str],
         embedding: Embeddings,
-        video_file: Path = Path("video.mp4"),
-        index_dir: Path = Path("index.d"),
+        video_file: Path = LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE,
+        index_dir: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR,
         metadatas: Optional[List[Dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> "VectorStore":
@@ -364,8 +363,8 @@ class VectorStore(VectorStore):
         Args:
             texts: List of text strings
             embedding: Embedding model
-            video_file: Path to store the video file
-            index_dir: Path to store the index file
+            video_file: Path to store the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+            index_dir: Path to store the index file, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
             metadatas: Optional list of metadata dicts
             **kwargs: Additional arguments passed to constructor
 
@@ -386,8 +385,8 @@ class VectorStore(VectorStore):
         cls,
         texts: List[str],
         embedding: Embeddings,
-        video_file: Path = Path("video.mp4"),
-        index_dir: Path = Path("index.d"),
+        video_file: Path = LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE,
+        index_dir: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR,
         metadatas: Optional[List[Dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> "VectorStore":
@@ -396,8 +395,8 @@ class VectorStore(VectorStore):
         Args:
             texts: List of text strings
             embedding: Embedding model
-            video_file: Path to store the video file
-            index_dir: Path to store the index file
+            video_file: Path to store the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+            index_dir: Path to store the index file, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
             metadatas: Optional list of metadata dicts
             **kwargs: Additional arguments passed to constructor
 
@@ -418,8 +417,8 @@ class VectorStore(VectorStore):
         cls,
         documents: List[Document],
         embedding: Embeddings,
-        video_file: Path = Path("video.mp4"),
-        index_dir: Path = Path("index.d"),
+        video_file: Path = LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE,
+        index_dir: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR,
         **kwargs: Any,
     ) -> "VectorStore":
         """Create vector store from documents.
@@ -427,8 +426,8 @@ class VectorStore(VectorStore):
         Args:
             documents: List of Document objects
             embedding: Embedding model
-            video_file: Path to store the video file
-            index_dir: Path to store the index file
+            video_file: Path to store the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+            index_dir: Path to store the index file, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
             **kwargs: Additional arguments passed to constructor
 
         Returns:
@@ -450,8 +449,8 @@ class VectorStore(VectorStore):
         cls,
         documents: List[Document],
         embedding: Embeddings,
-        video_file: Path = Path("video.mp4"),
-        index_dir: Path = Path("index.d"),
+        video_file: Path = LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE,
+        index_dir: Path = LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR,
         **kwargs: Any,
     ) -> "VectorStore":
         """Create vector store from documents asynchronously.
@@ -459,8 +458,8 @@ class VectorStore(VectorStore):
         Args:
             documents: List of Document objects
             embedding: Embedding model
-            video_file: Path to store the video file
-            index_dir: Path to store the index file
+            video_file: Path to store the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
+            index_dir: Path to store the index file, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
             **kwargs: Additional arguments passed to constructor
 
         Returns:

@@ -12,6 +12,23 @@ from langchain_memvid.video.ffmpeg import FFmpegProcessor
 from langchain_memvid.exceptions import VideoProcessingError
 
 
+# Test if FFmpeg is available
+def is_ffmpeg_available():
+    """Check if FFmpeg is available on the system."""
+    try:
+        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+# Skip all tests if FFmpeg is not installed
+pytestmark = pytest.mark.skipif(
+    not is_ffmpeg_available(),
+    reason="FFmpeg is not available"
+)
+
+
 @pytest.fixture
 def ffmpeg_processor():
     """Create a test FFmpeg processor."""
@@ -21,17 +38,6 @@ def ffmpeg_processor():
         codec="libx264",
         ffmpeg_options={"preset": "ultrafast"}
     )
-
-
-class TestFFmpegAvailability:
-    """Test cases for FFmpeg availability checks."""
-
-    def test_ffmpeg_available(self):
-        """Test if FFmpeg is available."""
-        try:
-            subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pytest.skip("FFmpeg not available")
 
 
 class TestFFmpegVideoEncoding:

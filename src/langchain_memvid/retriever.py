@@ -17,7 +17,7 @@ from tqdm import tqdm
 from .exceptions import RetrievalError
 from .video import VideoProcessor
 from .index import IndexManager
-from .config import VectorStoreConfig
+from .config import VectorStoreConfig, LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE, LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 from .logging import get_logger
 
 logger = get_logger("retriever")
@@ -33,8 +33,8 @@ class Retriever(BaseRetriever, BaseModel):
         from_attributes=True     # Allow conversion from objects with attributes
     )
 
-    video_file: Path = Field(description="Path to the video file")
-    index_dir: Path = Field(description="Path to the index directory")
+    video_file: Path = Field(description="Path to the video file", default=LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE)
+    index_dir: Path = Field(description="Path to the index directory", default=LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR)
     config: VectorStoreConfig = Field(description="Configuration for the retriever")
 
     # Using Any to allow unit testing
@@ -50,7 +50,7 @@ class Retriever(BaseRetriever, BaseModel):
     # Using PrivateAttr to avoid validation errors
     _frame_cache: Dict[int, Any] = PrivateAttr(default_factory=dict)
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, __context: Any):
         """Initialize additional attributes after Pydantic model initialization."""
         try:
             # Initialize video processor
@@ -391,6 +391,6 @@ class Retriever(BaseRetriever, BaseModel):
             logger.error(f"Failed to decode all frames: {str(e)}")
             raise RetrievalError(f"Failed to decode all frames: {str(e)}") from e
 
-    def clear_cache(self) -> None:
+    def clear_cache(self):
         """Clear the frame cache."""
         self._frame_cache.clear()

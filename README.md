@@ -20,11 +20,18 @@ Langchain Memvid is a powerful tool that combines the capabilities of Langchain 
 - **Flexible Configuration**: Customizable settings for encoding, indexing, and retrieval
 - **Multiple Embedding Models**: Support for various embedding models through Langchain
 - **Granular Control**: Access to low-level components for fine-tuned control
+- **Comprehensive Testing**: Extensive test suite with performance benchmarks
 
 ## Installation
 
 ```bash
 pip install langchain-memvid
+```
+
+For development and testing:
+
+```bash
+pip install -e ".[test]"
 ```
 
 ## Quick Start
@@ -77,6 +84,166 @@ To help you get started, we provide two comprehensive Jupyter notebooks in the [
 2. [advanced.ipynb](examples/advanced.ipynb) - An in-depth guide covering advanced features and customization options
 
 These notebooks provide hands-on examples and detailed explanations of the library's capabilities.
+
+## Testing and Benchmarking
+
+The project includes a comprehensive test suite and performance benchmarks to ensure reliability and measure performance characteristics.
+
+### Running Tests
+
+#### Unit Tests
+
+Run all unit tests:
+
+```bash
+pytest
+```
+
+Run specific test categories:
+
+```bash
+# Vector store tests
+pytest tests/test_vectorstore.py
+
+# Retriever tests
+pytest tests/test_retriever.py
+
+# Encoder tests
+pytest tests/test_encoder.py
+
+# Index tests
+pytest tests/test_index.py
+
+# Video processing tests
+pytest tests/test_video.py
+
+# IPython extension tests
+pytest tests/test_ipykernel_memvid_extension.py
+```
+
+#### Test Coverage
+
+The test suite covers:
+
+- **VectorStore**: Core vector store functionality, initialization, text addition, and search operations
+- **Retriever**: Document retrieval with similarity search and scoring
+- **Encoder**: Text encoding, QR code generation, and video building
+- **Index**: FAISS index management and operations
+- **Video Processing**: Video encoding/decoding and QR code extraction
+- **IPython Extension**: Magic commands and utility functions
+- **Configuration**: Settings validation and management
+- **Error Handling**: Exception scenarios and edge cases
+
+### Performance Benchmarks
+
+The project includes comprehensive benchmark tests to measure performance characteristics of the VectorStore implementation.
+
+#### Running Benchmarks
+
+**Note**: Benchmarks are disabled by default to avoid slowing down regular test runs. To enable benchmarks, override the `--benchmark-disable` and `--benchmark-skip` flags from `pyproject.toml` with `--benchmark-enable` and `--benchmark-only` command-line flags.
+
+Run all benchmarks:
+
+```bash
+pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable
+```
+
+Run specific benchmark categories:
+
+```bash
+# Search performance only
+pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "search"
+
+# Scaling tests only
+pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "scaling"
+
+# Memory usage tests only
+pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "memory"
+
+# Async operation tests only
+pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "async"
+```
+
+#### Benchmark Categories
+
+The benchmark suite measures:
+
+1. **Initialization Performance** (`TestVectorStoreInitializationBenchmark`)
+   - VectorStore creation time with different configurations
+
+2. **Text Addition Performance** (`TestVectorStoreTextAdditionBenchmark`)
+   - Adding texts and documents at different scales (10, 100, 1000 documents)
+   - Performance comparison between `add_texts()` and `add_documents()`
+
+3. **Search Performance** (`TestVectorStoreSearchBenchmark`)
+   - Similarity search performance with various parameters
+   - Search with and without similarity scores
+   - Performance with different k values (1, 5, 10, 20)
+
+4. **Scaling Characteristics** (`TestVectorStoreScalingBenchmark`)
+   - Performance scaling with document count (10, 50, 100, 200 documents)
+   - Search performance scaling with index size (50, 100, 200, 500 documents)
+
+5. **Memory Usage** (`TestVectorStoreMemoryBenchmark`)
+   - Memory consumption with large documents (~1000 characters each)
+
+6. **Async Operations** (`TestVectorStoreAsyncBenchmark`)
+   - Performance of asynchronous text addition and search operations
+
+7. **Factory Methods** (`TestVectorStoreFactoryMethodBenchmark`)
+   - Performance of `from_texts()` and `from_documents()` factory methods
+
+8. **Configuration Impact** (`TestVectorStoreConfigurationBenchmark`)
+   - Performance with different embedding dimensions (128, 256, 384, 512)
+   - Impact of custom QR code and index configurations
+
+#### Interpreting Benchmark Results
+
+Benchmark output shows:
+- **Mean**: Average execution time
+- **Std**: Standard deviation of execution times
+- **Min/Max**: Minimum and maximum execution times
+- **Rounds**: Number of benchmark rounds executed
+- **Iterations**: Number of iterations per round
+
+Example output:
+```
+test_add_texts_small_batch         0.1234 ± 0.0123 (mean ± std. dev. of 3 runs, 10 iterations each)
+test_add_texts_medium_batch        1.2345 ± 0.1234 (mean ± std. dev. of 3 runs, 10 iterations each)
+test_add_texts_large_batch        12.3456 ± 1.2345 (mean ± std. dev. of 3 runs, 10 iterations each)
+```
+
+#### Saving and Comparing Results
+
+Save benchmark results:
+
+```bash
+pytest tests/test_vectorstore_benchmark.py --benchmark-only --benchmark-enable --benchmark-save=results.json --benchmark-save-data
+```
+
+Compare with previous results:
+
+```bash
+pytest tests/test_vectorstore_benchmark.py --benchmark-only --benchmark-enable --benchmark-compare=results.json
+```
+
+### Test Data Generation
+
+The benchmarks use generated test data with realistic characteristics:
+
+- **Text Generation**: Realistic text with varying lengths (50-200 characters)
+- **Embeddings**: Deterministic embeddings based on text content hash
+- **Metadata**: Simple metadata with source and batch information
+- **Queries**: Generated queries for search testing
+
+### Continuous Integration
+
+The project includes GitHub Actions workflows that run:
+
+- Unit tests on multiple Python versions
+- Code coverage reporting
+- Linting and code quality checks
+- Release automation
 
 ## Advanced Usage
 
@@ -156,7 +323,7 @@ results = retriever.retrieve("query")
 ## Requirements
 
 - Python >= 3.12
-- OpenCV
+- OpenCV or/and ffmpeg
 - FAISS
 - Langchain
 - Other dependencies as specified in pyproject.toml

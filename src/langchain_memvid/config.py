@@ -8,6 +8,11 @@ Each configuration class is a Pydantic model that provides validation and docume
 from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 from enum import Enum
 from typing import Optional, Dict, Any, Tuple, Literal
+from pathlib import Path
+
+
+LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE = Path("kb_data.mp4")
+LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR = Path("kb_index.d")
 
 
 class VideoBackend(str, Enum):
@@ -147,4 +152,9 @@ class VectorStoreConfig(BaseModel):
         description="Vector index configuration"
     )
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        strict=False,            # Allow type coercion
+        from_attributes=True     # Allow conversion from objects with attributes
+    )

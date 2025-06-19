@@ -88,6 +88,20 @@ Set a sound theme on completion of cell execution:
 %set_sound_themes zelda
 ```
 
+### `%mute`
+Disable sound notifications:
+
+```python
+%mute
+```
+
+### `%unmute`
+Enable sound notifications:
+
+```python
+%unmute
+```
+
 ## Features
 
 - **Sound notifications**: Plays a sound when cells complete (requires `chime`)
