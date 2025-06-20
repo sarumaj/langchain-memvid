@@ -35,6 +35,13 @@ test = [
     "pytest-asyncio==1.0.0",
     "pytest-benchmark==5.1.0"
 ]
+docs = [
+    "sphinx==8.2.3",
+    "sphinx-rtd-theme==3.0.2",
+    "sphinx-autodoc-typehints==3.2.0",
+    "myst-parser==4.0.1",
+    "tomli==2.2.1"
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -55,3 +62,72 @@ filterwarnings = [
     "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning:importlib._bootstrap",
     "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning:importlib._bootstrap"
 ]
+
+[tool.sphinx]
+project = "langchain-memvid"
+author = "Dawid Ciepiela"
+copyright = "2025, Dawid Ciepiela"
+html_theme = "sphinx_rtd_theme"
+templates_path = ["_templates"]
+html_static_path = ["_static"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.githubpages",
+    "sphinx_rtd_theme",
+    "sphinx_autodoc_typehints",
+    "myst_parser"
+]
+
+autodoc_typehints = "description"
+autodoc_typehints_format = "short"
+
+napoleon_google_docstring = true
+napoleon_numpy_docstring = true
+napoleon_include_init_with_doc = true
+napoleon_include_private_with_doc = true
+napoleon_use_admonition_for_examples = true
+napoleon_use_admonition_for_notes = true
+napoleon_use_admonition_for_references = true
+napoleon_use_ivar = true
+napoleon_use_param = true
+napoleon_use_rtype = true
+napoleon_preprocess_types = true
+napoleon_attr_annotations = true
+
+myst_enable_extensions = [
+    "amsmath",
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "html_image",
+    "html_admonition",
+    "replacements",
+    "smartquotes",
+    "substitution",
+    "tasklist"
+]
+
+[tool.sphinx.html_theme_options]
+navigation_depth = 4
+collapse_navigation = false
+sticky_navigation = true
+includehidden = true
+titles_only = false
+
+[tool.sphinx.autodoc_default_options]
+members = true
+member_order = "bysource"
+special_members = "__init__"
+undoc_members = true
+exclude_members = "__weakref__"
+
+[tool.sphinx.intersphinx_mapping]
+python = ["https://docs.python.org/3/"]
+langchain = ["https://api.python.langchain.com/en/latest/"]
+opencv = ["https://docs.opencv.org/4.x/"]
+faiss = ["https://faiss.ai/"]

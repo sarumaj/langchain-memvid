@@ -58,6 +58,7 @@ temp_file = Path("temp.txt")
 temp_file.write_text("hello")
 # ... use the file ...
 %cleanup  # This will delete temp_file
+%cleanup -f  # Force cleanup without confirmation
 ```
 
 ### `%pip_install`
@@ -65,6 +66,7 @@ Install packages with visual feedback:
 
 ```python
 %pip_install pandas numpy
+%pip_install requests
 ```
 
 ### `%restart_kernel`
@@ -72,6 +74,7 @@ Restart the Jupyter kernel:
 
 ```python
 %restart_kernel
+%restart_kernel -f  # Force restart without confirmation
 ```
 
 ### `%list_sound_themes`
@@ -85,7 +88,7 @@ List available sound themes:
 Set a sound theme on completion of cell execution:
 
 ```python
-%set_sound_themes zelda
+%set_sound_theme zelda
 ```
 
 ### `%mute`
@@ -101,6 +104,28 @@ Enable sound notifications:
 ```python
 %unmute
 ```
+
+### `%dump`
+Dump notebook content to a Python file with markdown cells as comments and omit macro calls:
+
+```python
+%dump                               # Auto-discover notebook name
+%dump my_notebook                   # Dump all cells
+%dump -f my_notebook                # Force overwrite existing file
+%dump -r 1:5 my_notebook            # Dump only cells 1-5
+%dump -r 1,3,5 my_notebook          # Dump only cells 1, 3, and 5
+%dump -r :5 my_notebook             # Dump cells 1-5 (from beginning)
+%dump -r 1: my_notebook             # Dump cells 1 to end
+%dump -r 1:-2 my_notebook           # Dump cells 1 to end but last
+%dump -o my_notebook                # Dump cells with their outputs (html will be converted to markdown comments)
+```
+
+This command reads a `.ipynb` file and converts it to a `.py` file, filtering out magic commands and converting markdown cells to comments. The range specification follows IPython conventions:
+- **No range specified**: Dumps all cells
+- Single indices: `1`, `3`, `5`
+- Ranges: `1-5`, `-5` (from beginning), `1-` (to end)
+- Mixed: `1,3,5` (comma-separated)
+- Duplicate indices are automatically deduplicated
 
 ## Features
 

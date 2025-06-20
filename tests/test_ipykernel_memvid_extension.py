@@ -72,20 +72,22 @@ class TestUtilityFunctions:
         mock_import.side_effect = [ImportError, Mock()]
         mock_shell.run_line_magic = Mock()
 
-        result = ensure_import_module('nonexistent_module', mock_shell)
+        result = ensure_import_module('nonexistent_module', shell=mock_shell)
 
         assert result is not None
         mock_shell.run_line_magic.assert_called_once_with('pip', 'install nonexistent_module')
         assert mock_import.call_count == 2
 
     @patch('ipykernel_memvid_extension.importlib.import_module')
-    def test_ensure_import_module_missing_without_shell(self, mock_import):
+    @patch('ipykernel_memvid_extension.get_ipython')
+    def test_ensure_import_module_missing_without_shell(self, mock_get_ipython, mock_import):
         """Test ensure_import_module with missing module without shell."""
         mock_import.side_effect = ImportError
+        mock_shell = Mock()
+        mock_get_ipython.return_value = mock_shell
 
-        result = ensure_import_module('nonexistent_module')
-
-        assert result is None
+        with pytest.raises(ImportError):
+            ensure_import_module('nonexistent_module')
 
     def test_delete_path_file(self, temp_path):
         """Test delete_path with a file."""
@@ -655,101 +657,6 @@ class TestPathCollectorTransformer:
             result = transformer._is_likely_path_object(path_static_call)
             assert result is True
 
-    def test_debug_simple_path_division(self):
-        """Debug test to understand what happens with simple path division."""
-        transformer = PathCollectorTransformer()
-
-        # Create AST for: path / "subdir"
-        path_var = ast.Name(id='path', ctx=ast.Load())
-        subdir = ast.Constant(value="subdir")
-        binop = ast.BinOp(left=path_var, op=ast.Div(), right=subdir)
-
-        # Check what _is_likely_path_object returns for the left operand
-        is_path_left = transformer._is_likely_path_object(path_var)
-        print(f"_is_likely_path_object for left operand: {is_path_left}")
-
-        # Check if the binary operation is recognized as a Path object
-        is_path_binop = transformer._is_likely_path_object(binop)
-        print(f"_is_likely_path_object for binop: {is_path_binop}")
-
-        # Transform the node
-        result = transformer.visit_BinOp(binop)
-        print(f"visit_BinOp result type: {type(result)}")
-        print(f"visit_BinOp result: {result}")
-
-        # For now, just assert that we get a result (don't care about the type)
-        assert result is not None
-
-    def test_debug_nested_path_operation(self):
-        """Debug test to understand what happens with nested path operations."""
-        transformer = PathCollectorTransformer()
-
-        # Create AST for: (Path.cwd() / "subdir").parent
-        path_cwd = ast.Call(
-            func=ast.Attribute(
-                value=ast.Name(id='Path', ctx=ast.Load()),
-                attr='cwd',
-                ctx=ast.Load()
-            ),
-            args=[],
-            keywords=[]
-        )
-        subdir = ast.Constant(value="subdir")
-        binop = ast.BinOp(left=path_cwd, op=ast.Div(), right=subdir)
-        attr = ast.Attribute(value=binop, attr='parent', ctx=ast.Load())
-
-        # Check what _is_likely_path_object returns for the binary operation
-        is_path_binop = transformer._is_likely_path_object(binop)
-        print(f"_is_likely_path_object for binop: {is_path_binop}")
-
-        # Check what _is_likely_path_object returns for the attribute
-        is_path_attr = transformer._is_likely_path_object(attr)
-        print(f"_is_likely_path_object for attr: {is_path_attr}")
-
-        # Transform the attribute node
-        result = transformer.visit_Attribute(attr)
-        print(f"visit_Attribute result type: {type(result)}")
-        print(f"visit_Attribute result: {result}")
-
-        # For now, just assert that we get a result (don't care about the type)
-        assert result is not None
-
-    def test_debug_binop_recognition(self):
-        """Debug test to understand binary operation recognition."""
-        transformer = PathCollectorTransformer()
-
-        # Create AST for: Path.cwd() / "subdir"
-        path_cwd = ast.Call(
-            func=ast.Attribute(
-                value=ast.Name(id='Path', ctx=ast.Load()),
-                attr='cwd',
-                ctx=ast.Load()
-            ),
-            args=[],
-            keywords=[]
-        )
-        subdir = ast.Constant(value="subdir")
-        binop = ast.BinOp(left=path_cwd, op=ast.Div(), right=subdir)
-
-        # Check if the binary operation is recognized as a Path object
-        is_path = transformer._is_likely_path_object(binop)
-        print(f"Binary operation recognized as Path: {is_path}")
-
-        # Check if it's recognized as a path division operation
-        is_path_div = transformer._is_path_division_operation(binop)
-        print(f"Binary operation recognized as path division: {is_path_div}")
-
-        # Check the operands
-        is_left_path = transformer._is_likely_path_object(path_cwd)
-        is_right_path = transformer._is_likely_path_object(subdir)
-        print(f"Left operand is Path: {is_left_path}")
-        print(f"Right operand is Path: {is_right_path}")
-
-        assert is_path is True
-        assert is_path_div is True
-        assert is_left_path is True
-        assert is_right_path is False
-
     def test_is_likely_path_object_with_path_constructor(self):
         """Test _is_likely_path_object with Path constructor call."""
         transformer = PathCollectorTransformer()
@@ -1024,7 +931,6 @@ class TestMemvidMagics:
             magics = MemvidMagics(mock_shell)
 
             assert magics.shell == mock_shell
-            assert magics.chime_themes == ['theme1', 'theme2']
             mock_shell.events.register.assert_called_once_with('post_run_cell', magics.play_sound)
 
     @patch('ipykernel_memvid_extension.chime')
@@ -1051,28 +957,15 @@ class TestMemvidMagics:
 
             mock_chime.notify.assert_called_once_with("error", sync=True, raise_error=False)
 
-    @patch('ipykernel_memvid_extension.chime', None)
-    @patch('ipykernel_memvid_extension.DisplayContainer.display')
-    def test_post_run_cell_no_chime(self, mock_display_alert, mock_shell):
-        """Test post_run_cell when chime is not available."""
-        with patch('ipykernel_memvid_extension.Magics.__init__'):
-            magics = MemvidMagics(mock_shell)
-            result = Mock()
-            result.success = True
-
-            magics.play_sound(result)
-
-            mock_display_alert.assert_called_once()
-
     @patch('ipykernel_memvid_extension.display')
     def test_as_bullet_list_no_variable(self, mock_display, mock_shell):
         """Test as_bullet_list with no variable name."""
         with patch('ipykernel_memvid_extension.Magics.__init__'):
             magics = MemvidMagics(mock_shell)
 
-            magics.as_bullet_list("")
-
-            mock_display.assert_called_once()
+            # Test with empty string - should trigger argument parsing error
+            with pytest.raises(Exception):  # IPython will raise UsageError
+                magics.as_bullet_list("")
 
     @patch('ipykernel_memvid_extension.display')
     def test_as_bullet_list_variable_not_found(self, mock_display, mock_shell):
@@ -1117,9 +1010,9 @@ class TestMemvidMagics:
         with patch('ipykernel_memvid_extension.Magics.__init__'):
             magics = MemvidMagics(mock_shell)
 
-            magics.as_table("")
-
-            mock_display.assert_called_once()
+            # Test with empty string - should trigger argument parsing error
+            with pytest.raises(Exception):  # IPython will raise UsageError
+                magics.as_table("")
 
     @patch('ipykernel_memvid_extension.display')
     def test_as_table_variable_not_found(self, mock_display, mock_shell):
@@ -1279,15 +1172,17 @@ class TestMemvidMagics:
         """Test list_sound_themes magic command."""
         with patch('ipykernel_memvid_extension.Magics.__init__'):
             magics = MemvidMagics(mock_shell)
-            magics.chime_themes = ['theme1', 'theme2', 'theme3']
+            # Mock chime.themes() to return test themes
+            with patch('ipykernel_memvid_extension.chime') as mock_chime:
+                mock_chime.themes.return_value = ['theme1', 'theme2', 'theme3']
 
-            magics.list_sound_themes("")
+                magics.list_sound_themes("")
 
-            mock_display_notification.assert_called_once()
-            call_args = mock_display_notification.call_args[0][0]
-            assert "theme1" in call_args
-            assert "theme2" in call_args
-            assert "theme3" in call_args
+                mock_display_notification.assert_called_once()
+                call_args = mock_display_notification.call_args[0][0]
+                assert "theme1" in call_args
+                assert "theme2" in call_args
+                assert "theme3" in call_args
 
     @patch('ipykernel_memvid_extension.chime')
     @patch('ipykernel_memvid_extension.DisplayContainer.display')
@@ -1295,7 +1190,7 @@ class TestMemvidMagics:
         """Test set_sound_theme with valid theme."""
         with patch('ipykernel_memvid_extension.Magics.__init__'):
             magics = MemvidMagics(mock_shell)
-            magics.chime_themes = ['theme1', 'theme2']
+            mock_chime.themes.return_value = ['theme1', 'theme2']
 
             magics.set_sound_theme("theme1")
 
@@ -1307,11 +1202,318 @@ class TestMemvidMagics:
         """Test set_sound_theme with invalid theme."""
         with patch('ipykernel_memvid_extension.Magics.__init__'):
             magics = MemvidMagics(mock_shell)
-            magics.chime_themes = ['theme1', 'theme2']
+            with patch('ipykernel_memvid_extension.chime') as mock_chime:
+                mock_chime.themes.return_value = ['theme1', 'theme2']
 
-            magics.set_sound_theme("invalid_theme")
+                magics.set_sound_theme("invalid_theme")
+
+                mock_display_alert.assert_called_once()
+
+    @patch('ipykernel_memvid_extension.Path.exists')
+    @patch('ipykernel_memvid_extension.Path.read_text')
+    @patch('ipykernel_memvid_extension.Path.write_text')
+    @patch('ipykernel_memvid_extension.DisplayContainer.display')
+    @patch('ipykernel_memvid_extension.type_to_confirm')
+    def test_dump_output_exists_no_force_no_confirm(
+        self, mock_type_to_confirm, mock_display_alert, mock_write_text, mock_read_text, mock_exists, mock_shell
+    ):
+        """Test dump when output exists, no force, and user doesn't confirm."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            # Mock that source exists but output also exists
+            mock_exists.side_effect = [True, True]  # source.ipynb exists, output.py exists
+            mock_type_to_confirm.return_value = False
+
+            magics.dump('test_notebook')
 
             mock_display_alert.assert_called_once()
+            call_args = mock_display_alert.call_args[0][0]
+            assert "already exists" in call_args
+
+    @patch('ipykernel_memvid_extension.Path.exists')
+    @patch('ipykernel_memvid_extension.Path.read_text')
+    @patch('ipykernel_memvid_extension.Path.write_text')
+    @patch('ipykernel_memvid_extension.DisplayContainer.display')
+    @patch('ipykernel_memvid_extension.type_to_confirm')
+    def test_dump_success_no_range(
+        self, mock_type_to_confirm, mock_display_notification, mock_write_text, mock_read_text, mock_exists, mock_shell
+    ):
+        """Test successful dump without range specification."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            magics.shell.user_ns['__vsc_ipynb_file__'] = 'test_notebook.ipynb'
+            mock_exists.return_value = True
+            mock_read_text.return_value = (
+                '{"cells": [{"cell_type": "code", "source": ["print(\'hello\')"]}]}'
+            )
+            mock_type_to_confirm.return_value = True
+
+            magics.dump('test_notebook')
+
+            mock_write_text.assert_called_once()
+            mock_display_notification.assert_called_once()
+
+    @patch('ipykernel_memvid_extension.Path.exists')
+    @patch('ipykernel_memvid_extension.Path.read_text')
+    @patch('ipykernel_memvid_extension.Path.write_text')
+    @patch('ipykernel_memvid_extension.DisplayContainer.display')
+    @patch('ipykernel_memvid_extension.type_to_confirm')
+    def test_dump_with_range_specification(
+        self, mock_type_to_confirm, mock_display_notification, mock_write_text, mock_read_text, mock_exists, mock_shell
+    ):
+        """Test dump with range specification."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            magics.shell.user_ns['__vsc_ipynb_file__'] = 'test_notebook.ipynb'
+            mock_exists.return_value = True
+            mock_read_text.return_value = (
+                '{"cells": [{"cell_type": "code", "source": ["print(\'hello\')"]}, '
+                '{"cell_type": "code", "source": ["print(\'world\')"]}]}'
+            )
+            mock_type_to_confirm.return_value = True
+
+            magics.dump('test_notebook -r 1:2')
+
+            mock_write_text.assert_called_once()
+            mock_display_notification.assert_called_once()
+
+    @patch('ipykernel_memvid_extension.Path.exists')
+    @patch('ipykernel_memvid_extension.Path.read_text')
+    @patch('ipykernel_memvid_extension.Path.write_text')
+    @patch('ipykernel_memvid_extension.DisplayContainer.display')
+    @patch('ipykernel_memvid_extension.type_to_confirm')
+    def test_dump_invalid_range_specification(
+        self, mock_type_to_confirm, mock_display_alert, mock_write_text, mock_read_text, mock_exists, mock_shell
+    ):
+        """Test dump with invalid range specification."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            magics.shell.user_ns['__vsc_ipynb_file__'] = 'test_notebook.ipynb'
+            mock_exists.return_value = True
+            mock_read_text.return_value = (
+                '{"cells": [{"cell_type": "code", "source": ["print(\'hello\')"]}]}'
+            )
+            mock_type_to_confirm.return_value = True
+
+            magics.dump('test_notebook -r 999')
+
+            mock_display_alert.assert_called_once()
+            call_args = mock_display_alert.call_args[0][0]
+            assert "Invalid range specification" in call_args
+
+    @patch('ipykernel_memvid_extension.Path.exists')
+    @patch('ipykernel_memvid_extension.Path.read_text')
+    @patch('ipykernel_memvid_extension.Path.write_text')
+    @patch('ipykernel_memvid_extension.DisplayContainer.display')
+    @patch('ipykernel_memvid_extension.type_to_confirm')
+    def test_dump_with_markdown_cells(
+        self, mock_type_to_confirm, mock_display_notification, mock_write_text, mock_read_text, mock_exists, mock_shell
+    ):
+        """Test dump with markdown cells."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            magics.shell.user_ns['__vsc_ipynb_file__'] = 'test_notebook.ipynb'
+            mock_exists.return_value = True
+            mock_read_text.return_value = (
+                '{"cells": [{"cell_type": "markdown", "source": ["# Title", "Some text"]}]}'
+            )
+            mock_type_to_confirm.return_value = True
+
+            magics.dump('test_notebook')
+
+            mock_write_text.assert_called_once()
+            # Check that the output contains comment lines
+            written_content = mock_write_text.call_args[0][0]
+            assert "# " in written_content
+
+    @patch('ipykernel_memvid_extension.Path.exists')
+    @patch('ipykernel_memvid_extension.Path.read_text')
+    @patch('ipykernel_memvid_extension.Path.write_text')
+    @patch('ipykernel_memvid_extension.DisplayContainer.display')
+    @patch('ipykernel_memvid_extension.type_to_confirm')
+    def test_dump_filters_magic_commands(
+        self, mock_type_to_confirm, mock_display_notification, mock_write_text, mock_read_text, mock_exists, mock_shell
+    ):
+        """Test that dump filters out magic commands."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            magics.shell.user_ns['__vsc_ipynb_file__'] = 'test_notebook.ipynb'
+            mock_exists.return_value = True
+            mock_read_text.return_value = (
+                '{"cells": [{"cell_type": "code", "source": '
+                '["%magic_command", "print(\'hello\')", "%another_magic"]}]}'
+            )
+            mock_type_to_confirm.return_value = True
+
+            magics.dump('test_notebook')
+
+            mock_write_text.assert_called_once()
+            written_content = mock_write_text.call_args[0][0]
+            # Should not contain magic commands
+            assert "%magic_command" not in written_content
+            assert "%another_magic" not in written_content
+            # Should contain regular code
+            assert "print('hello')" in written_content
+
+    # Range parsing tests
+    @pytest.mark.parametrize(("range_spec", "expected", "total_cells"), (
+        ("", [0, 1, 2, 3, 4], 5),
+        ("   ", [0, 1, 2, 3, 4], 5),  # whitespace only
+        ("1", [0], 5),
+        ("1:3", [0, 1, 2], 5),
+        (":3", [0, 1, 2], 5),
+        ("3:", [2, 3, 4], 5),
+        ("1,3,5", [0, 2, 4], 5),
+        ("1,1,2,2,3", [0, 1, 2], 5),  # duplicate indices
+        ("1:3,2:4", [0, 1, 2, 3], 5),  # overlapping ranges
+        ("-1", [4], 5),  # negative indexing
+        ("-2", [3], 5),
+        ("-5", [0], 5),
+        ("-3:", [2, 3, 4], 5),  # negative start
+        (":-1", [0, 1, 2, 3], 5),  # negative end
+        ("-3:-1", [2, 3], 5),  # negative start and end
+        ("-2:5", [3, 4], 5),  # negative start, positive end
+        ("1:-1", [0, 1, 2, 3], 5),  # positive start, negative end
+    ), ids=list(range(1, 18)))
+    def test_parse_cell_range_valid_specs(self, range_spec, expected, total_cells, mock_shell):
+        """Test parsing valid range specifications."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            result = magics._parse_cell_range(range_spec, total_cells)
+            assert result == expected
+
+    @pytest.mark.parametrize("range_spec,total_cells,expected_error", [
+        ("0", 5, "Cell index must be between 1 and 5"),
+        ("6", 5, "Cell index must be between 1 and 5"),
+        ("-6", 5, "Cell index must be between 1 and 5"),  # too negative
+        ("5:3", 5, "Start index.*must be <= end index"),
+        ("1:2:3", 5, "Invalid range format"),
+        ("1::3", 5, "Invalid range format"),
+        ("abc", 5, "Invalid range format"),
+        ("1-3", 5, "Invalid range format"),  # old format no longer supported
+    ])
+    def test_parse_cell_range_invalid_specs(self, range_spec, total_cells, expected_error, mock_shell):
+        """Test parsing invalid range specifications."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            with pytest.raises(ValueError, match=expected_error):
+                magics._parse_cell_range(range_spec, total_cells)
+
+    # Cell dumping tests
+    def test_dump_code_cell(self, mock_shell):
+        """Test dumping a code cell."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            cell = {
+                "cell_type": "code",
+                "source": ["print('hello')\n", "%magic_command\n", "x = 1\n"],
+                "outputs": []
+            }
+            result = magics._dump_code_cell(cell)
+            expected = ["print('hello')\n", "x = 1\n"]
+            assert result[:-1] == expected
+
+    def test_dump_code_cell_empty(self, mock_shell):
+        """Test dumping an empty code cell."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            cell = {
+                "cell_type": "code",
+                "source": [],
+                "outputs": []
+            }
+            result = magics._dump_code_cell(cell)
+            assert result == []
+
+    def test_dump_code_cell_only_magic(self, mock_shell):
+        """Test dumping a code cell with only magic commands."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            cell = {
+                "cell_type": "code",
+                "source": ["%magic1\n", "%magic2\n"],
+                "outputs": []
+            }
+            result = magics._dump_code_cell(cell)
+            assert result == []
+
+    def test_dump_markdown_cell(self, mock_shell):
+        """Test dumping a markdown cell."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            cell = {
+                "cell_type": "markdown",
+                "source": ["# Title\n", "This is a **bold** text\n"]
+            }
+            result = magics._dump_markdown_cell(cell)
+            # Should contain comment lines starting with #
+            assert all(line.startswith("# ") for line in result[:-1])
+            assert len(result) > 0
+
+    def test_dump_markdown_cell_empty(self, mock_shell):
+        """Test dumping an empty markdown cell."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+            cell = {
+                "cell_type": "markdown",
+                "source": []
+            }
+            result = magics._dump_markdown_cell(cell)
+            assert result == []
+
+    # Modern argument parsing tests
+    @pytest.mark.parametrize("magic_name,args,expected_call", [
+        ("dump", "test_notebook", "dump"),
+        ("cleanup", "", "cleanup"),
+        ("as_bullet_list", "test_var", "as_bullet_list"),
+        ("as_table", "test_var", "as_table"),
+        ("pip_install", "pandas numpy", "pip_install"),
+        ("restart_kernel", "-f", "restart_kernel"),
+        ("set_sound_theme", "zelda", "set_sound_theme"),
+    ])
+    def test_magic_commands_use_modern_argument_parsing(self, magic_name, args, expected_call, mock_shell):
+        """Test that all magic commands use modern argument parsing."""
+        with patch('ipykernel_memvid_extension.Magics.__init__'):
+            magics = MemvidMagics(mock_shell)
+
+            with patch('ipykernel_memvid_extension.parse_argstring') as mock_parse:
+                # Create specific mock args for each command
+                mock_args = Mock()
+                match magic_name:
+                    case "dump":
+                        mock_args.notebook_name = 'test_notebook'
+                        mock_args.force = False
+                        mock_args.range_spec = None
+                        mock_args.cell_outputs = False
+                    case "cleanup":
+                        mock_args.force = False
+                    case "as_bullet_list" | "as_table":
+                        mock_args.variable_name = ['test_var']
+                    case "pip_install":
+                        mock_args.packages = ['pandas', 'numpy']
+                    case "restart_kernel":
+                        mock_args.force = True
+                    case "set_sound_theme":
+                        mock_args.theme_name = ['zelda']
+
+                mock_parse.return_value = mock_args
+
+                # Mock necessary dependencies for each command
+                with (
+                    patch('ipykernel_memvid_extension.DisplayContainer.display'),
+                    patch('ipykernel_memvid_extension.Path.exists', return_value=True),
+                    patch('ipykernel_memvid_extension.Path.read_text', return_value='{"cells": []}'),
+                    patch('ipykernel_memvid_extension.Path.write_text'),
+                    patch('ipykernel_memvid_extension.type_to_confirm', return_value=True),
+                    patch('ipykernel_memvid_extension.chime') as mock_chime,
+                ):
+                    mock_chime.themes.return_value = ['zelda']
+
+                    # Call the magic command
+                    getattr(magics, magic_name)(args)
+
+                    # Verify parse_argstring was called
+                    mock_parse.assert_called_once()
 
 
 class TestLoadIPythonExtension:

@@ -36,27 +36,9 @@ pip install -e ".[test]"
 
 ## Quick Start
 
-```python
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_memvid import VectorStore
+For a complete quick start guide, see our **[quickstart.py](examples/quickstart.py)** example.
 
-# Initialize vector store
-embeddings = HuggingFaceEmbeddings()
-vs = VectorStore.from_texts(
-    texts=["Important fact 1", "Important fact 2", "Historical event details"],
-    embedding=embeddings,
-    video_file="knowledge_base.mp4",
-    index_dir="knowledge_base_index.d",
-    metadatas=[
-        {"id": 0, "source": "doc1.txt", "category": "facts"},
-        {"id": 1, "source": "doc1.txt", "category": "facts"},
-        {"id": 2, "source": "doc2.txt", "category": "history"}
-    ]
-)
-
-# Search for similar content
-results = vs.similarity_search("query", k=2)
-```
+For detailed explanations and interactive examples, check out **[quickstart.ipynb](examples/quickstart.ipynb)**.
 
 ## IPython Extension (Optional)
 
@@ -76,249 +58,44 @@ The extension provides magic commands for:
 
 For detailed usage instructions, see [IPYTHON_EXTENSION.md](IPYTHON_EXTENSION.md).
 
-## Example Notebooks
+## Examples
 
-To help you get started, we provide two comprehensive Jupyter notebooks in the [examples](examples) directory:
+We provide comprehensive examples in multiple formats to help you get started:
 
-1. [quickstart.ipynb](examples/quickstart.ipynb) - A basic tutorial demonstrating core functionality and common use cases
-2. [advanced.ipynb](examples/advanced.ipynb) - An in-depth guide covering advanced features and customization options
+### 📓 Jupyter Notebooks (Interactive)
 
-These notebooks provide hands-on examples and detailed explanations of the library's capabilities.
+The most detailed examples with explanations and visual outputs:
 
-## Testing and Benchmarking
+- **[quickstart.ipynb](examples/quickstart.ipynb)** - Basic tutorial demonstrating core functionality
+- **[advanced.ipynb](examples/advanced.ipynb)** - Advanced features and customization options
 
-The project includes a comprehensive test suite and performance benchmarks to ensure reliability and measure performance characteristics.
+### 📄 Python Scripts (Executable)
 
-### Running Tests
+Auto-generated Python files from the notebooks:
 
-#### Unit Tests
+- **[quickstart.py](examples/quickstart.py)** - Basic usage example
+- **[advanced.py](examples/advanced.py)** - Advanced usage example
 
-Run all unit tests:
+### Running the Examples
 
-```bash
-pytest
-```
+1. **Interactive (Recommended)**: Open the `.ipynb` files in Jupyter
+2. **Script**: Run the `.py` files directly with Python
 
-Run specific test categories:
+The Python files are automatically generated when notebooks are executed, ensuring they stay in sync.
 
-```bash
-# Vector store tests
-pytest tests/test_vectorstore.py
+## Testing
 
-# Retriever tests
-pytest tests/test_retriever.py
+For comprehensive testing information, including unit tests, test coverage, and continuous integration details, see [TESTING.md](TESTING.md).
 
-# Encoder tests
-pytest tests/test_encoder.py
+## Benchmarking
 
-# Index tests
-pytest tests/test_index.py
-
-# Video processing tests
-pytest tests/test_video.py
-
-# IPython extension tests
-pytest tests/test_ipykernel_memvid_extension.py
-```
-
-#### Test Coverage
-
-The test suite covers:
-
-- **VectorStore**: Core vector store functionality, initialization, text addition, and search operations
-- **Retriever**: Document retrieval with similarity search and scoring
-- **Encoder**: Text encoding, QR code generation, and video building
-- **Index**: FAISS index management and operations
-- **Video Processing**: Video encoding/decoding and QR code extraction
-- **IPython Extension**: Magic commands and utility functions
-- **Configuration**: Settings validation and management
-- **Error Handling**: Exception scenarios and edge cases
-
-### Performance Benchmarks
-
-The project includes comprehensive benchmark tests to measure performance characteristics of the VectorStore implementation.
-
-#### Running Benchmarks
-
-**Note**: Benchmarks are disabled by default to avoid slowing down regular test runs. To enable benchmarks, override the `--benchmark-disable` and `--benchmark-skip` flags from `pyproject.toml` with `--benchmark-enable` and `--benchmark-only` command-line flags.
-
-Run all benchmarks:
-
-```bash
-pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable
-```
-
-Run specific benchmark categories:
-
-```bash
-# Search performance only
-pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "search"
-
-# Scaling tests only
-pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "scaling"
-
-# Memory usage tests only
-pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "memory"
-
-# Async operation tests only
-pytest tests/test_vectorstore_benchmark.py -v --benchmark-only --benchmark-enable -k "async"
-```
-
-#### Benchmark Categories
-
-The benchmark suite measures:
-
-1. **Initialization Performance** (`TestVectorStoreInitializationBenchmark`)
-   - VectorStore creation time with different configurations
-
-2. **Text Addition Performance** (`TestVectorStoreTextAdditionBenchmark`)
-   - Adding texts and documents at different scales (10, 100, 1000 documents)
-   - Performance comparison between `add_texts()` and `add_documents()`
-
-3. **Search Performance** (`TestVectorStoreSearchBenchmark`)
-   - Similarity search performance with various parameters
-   - Search with and without similarity scores
-   - Performance with different k values (1, 5, 10, 20)
-
-4. **Scaling Characteristics** (`TestVectorStoreScalingBenchmark`)
-   - Performance scaling with document count (10, 50, 100, 200 documents)
-   - Search performance scaling with index size (50, 100, 200, 500 documents)
-
-5. **Memory Usage** (`TestVectorStoreMemoryBenchmark`)
-   - Memory consumption with large documents (~1000 characters each)
-
-6. **Async Operations** (`TestVectorStoreAsyncBenchmark`)
-   - Performance of asynchronous text addition and search operations
-
-7. **Factory Methods** (`TestVectorStoreFactoryMethodBenchmark`)
-   - Performance of `from_texts()` and `from_documents()` factory methods
-
-8. **Configuration Impact** (`TestVectorStoreConfigurationBenchmark`)
-   - Performance with different embedding dimensions (128, 256, 384, 512)
-   - Impact of custom QR code and index configurations
-
-#### Interpreting Benchmark Results
-
-Benchmark output shows:
-- **Mean**: Average execution time
-- **Std**: Standard deviation of execution times
-- **Min/Max**: Minimum and maximum execution times
-- **Rounds**: Number of benchmark rounds executed
-- **Iterations**: Number of iterations per round
-
-Example output:
-```
-test_add_texts_small_batch         0.1234 ± 0.0123 (mean ± std. dev. of 3 runs, 10 iterations each)
-test_add_texts_medium_batch        1.2345 ± 0.1234 (mean ± std. dev. of 3 runs, 10 iterations each)
-test_add_texts_large_batch        12.3456 ± 1.2345 (mean ± std. dev. of 3 runs, 10 iterations each)
-```
-
-#### Saving and Comparing Results
-
-Save benchmark results:
-
-```bash
-pytest tests/test_vectorstore_benchmark.py --benchmark-only --benchmark-enable --benchmark-save=results.json --benchmark-save-data
-```
-
-Compare with previous results:
-
-```bash
-pytest tests/test_vectorstore_benchmark.py --benchmark-only --benchmark-enable --benchmark-compare=results.json
-```
-
-### Test Data Generation
-
-The benchmarks use generated test data with realistic characteristics:
-
-- **Text Generation**: Realistic text with varying lengths (50-200 characters)
-- **Embeddings**: Deterministic embeddings based on text content hash
-- **Metadata**: Simple metadata with source and batch information
-- **Queries**: Generated queries for search testing
-
-### Continuous Integration
-
-The project includes GitHub Actions workflows that run:
-
-- Unit tests on multiple Python versions
-- Code coverage reporting
-- Linting and code quality checks
-- Release automation
+For detailed benchmarking information, including performance tests, benchmark categories, and result interpretation, see [BENCHMARKING.md](BENCHMARKING.md).
 
 ## Advanced Usage
 
-For more granular control, you can use the individual components:
+For comprehensive advanced usage examples, see our **[advanced.py](examples/advanced.py)** example.
 
-```python
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_memvid import (
-    Encoder,
-    IndexConfig,
-    IndexManager,
-    QRCodeConfig,
-    VideoConfig,
-    Retriever,
-    VectorStoreConfig
-)
-from langchain_memvid.video import VideoProcessor
-from pathlib import Path
-
-# Initialize components
-config = IndexConfig(
-    index_type="faiss",
-    metric="cosine",
-    nlist=6  # Number of clusters for IVF index
-)
-embeddings = HuggingFaceEmbeddings()
-index_manager = IndexManager(config=config, embeddings=embeddings)
-
-# Add texts with metadata
-texts = ["text chunk 1", "text chunk 2"]
-metadata = [
-    {"id": 0, "source": "doc1.txt", "category": "example"},
-    {"id": 1, "source": "doc1.txt", "category": "example"}
-]
-index_manager.add_texts(texts, metadata)
-
-# Configure video processing
-video_config = VideoConfig(
-    fps=30,
-    resolution=(1920, 1080),
-    codec="mp4v"
-)
-qrcode_config = QRCodeConfig(
-    error_correction="H",
-    box_size=10,
-    border=4
-)
-
-# Create video processor and encoder
-video_processor = VideoProcessor(
-    video_config=video_config,
-    qrcode_config=qrcode_config
-)
-encoder = Encoder(video_processor, index_manager)
-
-# Build video with encoded data
-video_file = Path("output.mp4")
-index_dir = Path("index.d")
-encoder.build_video(video_file, index_dir)
-
-# Initialize retriever for searching
-retriever = Retriever(
-    video_file=video_file,
-    index_dir=index_dir,
-    config=VectorStoreConfig(
-        video=video_config,
-        qrcode=qrcode_config
-    ),
-    index_manager=index_manager,
-    k=2
-)
-
-# Search for similar content
-results = retriever.retrieve("query")
-```
+For detailed explanations and interactive examples, check out **[advanced.ipynb](examples/advanced.ipynb)**.
 
 ## Requirements
 
@@ -332,20 +109,7 @@ results = retriever.retrieve("query")
 
 This project is licensed under the BSD-3-Clause License - see the LICENSE file for details.
 
-## License Notices
-
-This project uses several open-source libraries:
-
-- FAISS is licensed under the Apache License 2.0
-- OpenCV is licensed under the Apache License 2.0
-- Langchain is licensed under the MIT License
-- QRCode is licensed under the BSD License
-- Pydantic is licensed under the MIT License
-- Other dependencies are licensed under MIT, Apache 2.0, or AGPL-3.0
-
-Full license texts for all dependencies are included in the [licenses](licenses) directory of this project. Each license file is named according to the project it belongs to (e.g., `licenses/faiss.txt`, `licenses/opencv.txt`, etc.).
-
-For the original license texts and more information, please refer to the respective projects' repositories.
+For information about third-party licenses, see [LICENSES.md](LICENSES.md).
 
 ## Acknowledgments
 
