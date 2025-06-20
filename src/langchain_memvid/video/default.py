@@ -1,17 +1,16 @@
 """
-Video processing utilities for MemVid.
+Default video processing implementation using OpenCV.
 
-This module provides utilities for video processing, including encoding and decoding
-of QR codes in video format.
+This module provides video processing capabilities using OpenCV as the backend.
 """
 
 import cv2
 import numpy as np
 from pathlib import Path
-from typing import List, Generator, NamedTuple, Iterable
+from typing import List, Generator, Iterable, Optional, NamedTuple
+from PIL import Image
 import qrcode
 from qrcode.image.base import BaseImage
-from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 
 from ..exceptions import VideoProcessingError, QRCodeError
@@ -20,8 +19,9 @@ from ..utils import ProgressDisplay
 from ..logging import get_logger
 from .ffmpeg import FFmpegProcessor
 from .codecs import get_codec_parameters
+from ..types import VideoInfo
 
-logger = get_logger("video")
+logger = get_logger("video.default")
 
 
 class QRCodeDetection(NamedTuple):
@@ -32,7 +32,11 @@ class QRCodeDetection(NamedTuple):
 
 
 class VideoProcessor:
-    """Handles video processing operations for MemVid."""
+    """Handles video processing operations for MemVid.
+
+    - Encodes and decodes QR codes in video frames.
+    - Supports both OpenCV and FFmpeg backends for video operations.
+    """
 
     def __init__(
         self,
@@ -316,3 +320,167 @@ class VideoProcessor:
 
         except Exception as e:
             raise QRCodeError(f"Failed to extract QR codes: {str(e)}")
+
+    def remove_frames_from_video(
+        self,
+        video_path: Path,
+        frame_numbers: List[int],
+        output_path: Optional[Path] = None,
+    ) -> Path:
+        """Remove specific frames from a video file.
+
+        This method creates a new video file without the specified frames.
+        It's more efficient than rebuilding the entire video.
+
+        Args:
+            video_path: Path to the input video file
+            frame_numbers: List of frame numbers to remove (0-indexed)
+            output_path: Optional output path. If None, creates a temporary file
+
+        Returns:
+            Path to the new video file without the specified frames
+
+        Raises:
+            VideoProcessingError: If frame removal fails
+        """
+        try:
+            if not video_path.exists():
+                raise VideoProcessingError(f"Video file not found: {video_path}")
+
+            if not frame_numbers:
+                # No frames to remove, return original file
+                return video_path
+
+            # Sort frame numbers in descending order to avoid index shifting
+            frame_numbers = sorted(frame_numbers, reverse=True)
+
+            if output_path is None:
+                # Create temporary output file
+                import tempfile
+                temp_file = tempfile.NamedTemporaryFile(
+                    suffix=video_path.suffix,
+                    delete=False
+                )
+                output_path = Path(temp_file.name)
+                temp_file.close()
+
+            # Use FFmpeg for efficient frame removal
+            if self._video_processor is not None:
+                return self._video_processor.remove_frames_from_video(
+                    video_path, frame_numbers, output_path
+                )
+
+            # Fallback to OpenCV method (less efficient)
+            return self._remove_frames_opencv(video_path, frame_numbers, output_path)
+
+        except Exception as e:
+            raise VideoProcessingError(f"Failed to remove frames from video: {str(e)}")
+
+    def _remove_frames_opencv(
+        self,
+        video_path: Path,
+        frame_numbers: List[int],
+        output_path: Path,
+    ) -> Path:
+        """Remove frames using OpenCV (fallback method).
+
+        Args:
+            video_path: Path to the input video file
+            frame_numbers: List of frame numbers to remove
+            output_path: Path to the output video file
+
+        Returns:
+            Path to the new video file
+
+        Raises:
+            VideoProcessingError: If frame removal fails
+        """
+        try:
+            # Open input video
+            cap = cv2.VideoCapture(str(video_path))
+            if not cap.isOpened():
+                raise VideoProcessingError(f"Failed to open video file: {video_path}")
+
+            # Get video properties
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            # Create output video writer
+            fourcc = cv2.VideoWriter_fourcc(*self.video_config.codec)
+            out = cv2.VideoWriter(
+                str(output_path),
+                fourcc,
+                fps,
+                (width, height),
+                isColor=True
+            )
+
+            # Convert frame numbers to set for O(1) lookup
+            frames_to_remove = set(frame_numbers)
+
+            # Process frames
+            frame_count = 0
+            with self._progress.progress(total=total_frames, desc="Removing frames") as pbar:
+                while True:
+                    retval, frame = cap.read()
+                    if not retval:
+                        break
+
+                    # Skip frames that should be removed
+                    if frame_count not in frames_to_remove:
+                        out.write(frame)
+
+                    frame_count += 1
+                    pbar.update(1)
+
+            # Cleanup
+            cap.release()
+            out.release()
+
+            logger.info(f"Removed {len(frame_numbers)} frames from video")
+            return output_path
+
+        except Exception as e:
+            raise VideoProcessingError(f"Failed to remove frames with OpenCV: {str(e)}")
+
+    def get_video_info(self, video_path: Path) -> VideoInfo:
+        """Get information about a video file.
+
+        Args:
+            video_path: Path to the video file
+
+        Returns:
+            VideoInfo: Information about the video file
+
+        Raises:
+            VideoProcessingError: If getting video info fails
+        """
+        try:
+            if not video_path.exists():
+                raise VideoProcessingError(f"Video file not found: {video_path}")
+
+            cap = cv2.VideoCapture(str(video_path))
+            if not cap.isOpened():
+                raise VideoProcessingError(f"Failed to open video file: {video_path}")
+
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            duration_seconds = frame_count / fps if fps > 0 else 0
+            file_size_mb = video_path.stat().st_size / (1024 * 1024)
+
+            cap.release()
+            return VideoInfo(
+                frame_count=frame_count,
+                fps=fps,
+                width=width,
+                height=height,
+                duration_seconds=duration_seconds,
+                file_size_mb=file_size_mb
+            )
+
+        except Exception as e:
+            raise VideoProcessingError(f"Failed to get video info: {str(e)}")

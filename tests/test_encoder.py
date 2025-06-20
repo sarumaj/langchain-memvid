@@ -1,3 +1,5 @@
+"""Unit tests for the Encoder class."""
+
 import pytest
 from unittest.mock import Mock
 from PIL import Image
@@ -25,24 +27,18 @@ def mock_config():
 
 
 @pytest.fixture
-def mock_index_manager():
-    manager = Mock()
-    manager.embeddings = Mock()
-    manager.embeddings.embed_documents.return_value = [[0.1, 0.2, 0.3]]
-    return manager
-
-
-@pytest.fixture
-def encoder(mock_config, mock_index_manager):
-    return Encoder(config=mock_config, index_manager=mock_index_manager)
+def encoder(vector_store_config, mock_index_manager):
+    """Create an Encoder instance for testing."""
+    return Encoder(config=vector_store_config, index_manager=mock_index_manager)
 
 
 class TestEncoderInitialization:
     """Test cases for Encoder initialization."""
 
-    def test_encoder_initialization(self, mock_config, mock_index_manager):
-        encoder = Encoder(config=mock_config, index_manager=mock_index_manager)
-        assert encoder.config == mock_config
+    def test_encoder_initialization(self, vector_store_config, mock_index_manager):
+        """Test encoder initialization."""
+        encoder = Encoder(config=vector_store_config, index_manager=mock_index_manager)
+        assert encoder.config == vector_store_config
         assert encoder.index_manager == mock_index_manager
         assert encoder._chunks == []
 
@@ -51,6 +47,7 @@ class TestEncoderChunkManagement:
     """Test cases for chunk management operations."""
 
     def test_add_chunks_success(self, encoder):
+        """Test adding chunks successfully."""
         texts = ["test1", "test2"]
         metadatas = [{"source": "doc1"}, {"source": "doc2"}]
 
@@ -63,6 +60,7 @@ class TestEncoderChunkManagement:
         assert encoder._chunks[1]["metadata"] == {"source": "doc2"}
 
     def test_add_chunks_without_metadata(self, encoder):
+        """Test adding chunks without metadata."""
         texts = ["test1", "test2"]
 
         encoder.add_chunks(texts)
@@ -74,6 +72,7 @@ class TestEncoderChunkManagement:
         assert encoder._chunks[1]["metadata"] == {}
 
     def test_add_chunks_mismatched_lengths(self, encoder):
+        """Test adding chunks with mismatched lengths."""
         texts = ["test1", "test2"]
         metadatas = [{"source": "doc1"}]  # Only one metadata entry
 
@@ -81,6 +80,7 @@ class TestEncoderChunkManagement:
             encoder.add_chunks(texts, metadatas)
 
     def test_clear_chunks(self, encoder):
+        """Test clearing chunks."""
         texts = ["test1", "test2"]
         encoder.add_chunks(texts)
         assert len(encoder._chunks) == 2
@@ -93,6 +93,7 @@ class TestEncoderVideoBuilding:
     """Test cases for video building functionality."""
 
     def test_build_video_success(self, encoder, tmp_path):
+        """Test successful video building."""
         # Setup
         texts = ["test1", "test2"]
         metadatas = [{"source": "doc1"}, {"source": "doc2"}]
@@ -140,6 +141,7 @@ class TestEncoderVideoBuilding:
         encoder.index_manager.save.assert_called_once_with(index_dir.with_suffix(".d"))
 
     def test_build_video_no_chunks(self, encoder, tmp_path):
+        """Test building video with no chunks."""
         output_file = tmp_path / "output.mp4"
         index_dir = tmp_path / "index.d"
 
@@ -147,6 +149,7 @@ class TestEncoderVideoBuilding:
             encoder.build_video(output_file, index_dir)
 
     def test_build_video_handles_errors(self, encoder, tmp_path):
+        """Test error handling during video building."""
         # Setup
         texts = ["test1"]
         encoder.add_chunks(texts)

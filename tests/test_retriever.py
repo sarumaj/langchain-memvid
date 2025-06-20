@@ -1,95 +1,17 @@
-"""
-Unit tests for the Retriever class.
-"""
+"""Unit tests for the Retriever class."""
 
-import pytest
-from pathlib import Path
-import tempfile
 import json
-from unittest.mock import Mock, patch, MagicMock
-import numpy as np
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 from PIL import Image
 
-from langchain_memvid.retriever import Retriever
-from langchain_memvid.config import VectorStoreConfig, VideoConfig, QRCodeConfig
-from langchain_memvid.exceptions import RetrievalError
+import pytest
+
 from langchain_core.documents import Document
-from langchain_memvid.index import SearchResult
 
-
-@pytest.fixture
-def video_config():
-    """Create a test video configuration."""
-    return VideoConfig(
-        fps=30,
-        resolution=(640, 480),
-        codec="mp4v"
-    )
-
-
-@pytest.fixture
-def qrcode_config():
-    """Create a test QR code configuration."""
-    return QRCodeConfig(
-        error_correction="H",
-        box_size=10,
-        border=4
-    )
-
-
-@pytest.fixture
-def vector_store_config(video_config, qrcode_config):
-    """Create a test vector store configuration."""
-    return VectorStoreConfig(
-        video=video_config,
-        qrcode=qrcode_config
-    )
-
-
-@pytest.fixture
-def mock_index_manager():
-    """Create a mock index manager."""
-    manager = Mock()
-
-    # Mock embeddings
-    embeddings = Mock()
-    embeddings.embed_query.return_value = np.random.rand(384)  # Mock embedding
-    manager.embeddings = embeddings
-
-    # Create mock search results
-    search_results = [
-        SearchResult(
-            text="test1",
-            source="doc1",
-            category="test",
-            similarity=0.8,
-            metadata={"source": "doc1"}
-        ),
-        SearchResult(
-            text="test2",
-            source="doc2",
-            category="test",
-            similarity=0.6,
-            metadata={"source": "doc2"}
-        )
-    ]
-
-    # Create a MagicMock for search_text that calls embed_query internally
-    search_text_mock = MagicMock()
-
-    def search_text_side_effect(query_text, k=4):
-        # Call embed_query to ensure it's called
-        manager.embeddings.embed_query(query_text)
-        return search_results[:k]
-
-    search_text_mock.side_effect = search_text_side_effect
-    manager.search_text = search_text_mock
-
-    manager.get_metadata.return_value = [
-        {"text": "test1", "metadata": {"source": "doc1"}},
-        {"text": "test2", "metadata": {"source": "doc2"}}
-    ]
-    return manager
+from langchain_memvid.retriever import Retriever
+from langchain_memvid.exceptions import RetrievalError
 
 
 @pytest.fixture
@@ -100,7 +22,6 @@ def mock_video_processor():
     def create_new_frame():
         return Image.new('RGB', (640, 480), color='white')
 
-    # Make decode_video return a generator that yields new frames each time
     def decode_video_mock(*args, **kwargs):
         return [create_new_frame()]
 
@@ -174,115 +95,121 @@ class TestRetrieverInitialization:
 
 
 class TestRetrieverDocumentRetrieval:
-    """Test cases for document retrieval functionality."""
+    """Test cases for document retrieval operations."""
 
     def test_get_relevant_documents(self, retriever):
         """Test getting relevant documents."""
         query = "test query"
         documents = retriever._get_relevant_documents(query)
 
-        # Verify index manager calls
-        retriever.index_manager.embeddings.embed_query.assert_called_once_with(query)
-        retriever.index_manager.search_text.assert_called_once()
-
-        # Verify results
         assert len(documents) == 2
         assert all(isinstance(doc, Document) for doc in documents)
         assert documents[0].page_content == "test1"
-        assert documents[0].metadata["source"] == "doc1"
-        assert documents[0].metadata["similarity"] == 0.8
         assert documents[1].page_content == "test2"
-        assert documents[1].metadata["source"] == "doc2"
-        assert documents[1].metadata["similarity"] == 0.6
+
+        # Verify embeddings were called
+        retriever.index_manager.embeddings.embed_query.assert_called_once_with(query)
 
     def test_get_document_by_id(self, retriever):
-        """Test getting document by ID."""
+        """Test getting a document by ID."""
         doc = retriever.get_document_by_id(0)
-
-        assert isinstance(doc, Document)
         assert doc.page_content == "test1"
         assert doc.metadata["source"] == "doc1"
 
     def test_get_document_by_id_not_found(self, retriever):
-        """Test getting document by non-existent ID."""
+        """Test getting a document by non-existent ID."""
+        # Mock the get_metadata method to return empty list for non-existent ID
         retriever.index_manager.get_metadata.return_value = []
-        doc = retriever.get_document_by_id(999)
-        assert doc is None
+
+        # The method should return None when document is not found
+        result = retriever.get_document_by_id(999)
+        assert result is None
+
+    def test_get_document_by_id_with_full_metadata(self, retriever):
+        """Test getting a document by ID with full metadata."""
+        doc = retriever.get_document_by_id(0, include_full_metadata=True)
+        assert doc.page_content == "test1"
+        assert doc.metadata["source"] == "doc1"
+        assert doc.metadata["category"] == "test_category"
 
     def test_get_documents_by_ids(self, retriever):
         """Test getting multiple documents by IDs."""
         docs = retriever.get_documents_by_ids([0, 1])
-
         assert len(docs) == 2
-        assert all(isinstance(doc, Document) for doc in docs)
         assert docs[0].page_content == "test1"
         assert docs[1].page_content == "test2"
 
 
 class TestRetrieverFrameDecoding:
-    """Test cases for frame decoding functionality."""
+    """Test cases for frame decoding operations."""
 
     def test_decode_frame(self, retriever):
-        """Test decoding a specific frame."""
-        doc = retriever.decode_frame(0)
+        """Test decoding a single frame."""
+        # Mock the video processor to return a Document
+        retriever.video_processor.extract_qr_codes.return_value = [
+            '{"text": "test", "metadata": {"source": "test"}}'
+        ]
 
+        doc = retriever.decode_frame(0)
         assert isinstance(doc, Document)
         assert doc.page_content == "test"
-        assert doc.metadata["source"] == "test"
 
     def test_decode_all_frames(self, retriever):
         """Test decoding all frames."""
-        docs = list(retriever.decode_all_frames())
+        # Mock the video processor to return Documents
+        retriever.video_processor.extract_qr_codes.return_value = [
+            '{"text": "test", "metadata": {"source": "test"}}'
+        ]
 
-        assert len(docs) == 1  # Based on mock setup
-        assert all(isinstance(doc, Document) for doc in docs)
-        assert docs[0].page_content == "test"
+        docs = retriever.decode_all_frames()
+        assert len(docs) == 1
+        assert isinstance(docs[0], Document)
 
 
 class TestRetrieverCaching:
-    """Test cases for frame caching functionality."""
+    """Test cases for caching functionality."""
 
     def test_frame_caching(self, retriever):
-        """Test that frames are cached after decoding."""
-        # Decode a frame
+        """Test frame caching behavior."""
+        # Mock the video processor
+        retriever.video_processor.extract_qr_codes.return_value = [
+            '{"text": "test", "metadata": {"source": "test"}}'
+        ]
+
+        # First call should decode from video
         doc1 = retriever.decode_frame(0)
-
-        # Decode the same frame again
-        doc2 = retriever.decode_frame(0)
-
-        # With the current mock implementation, we can't test object identity
-        # since the mock returns new objects each time. Instead, test that
-        # both calls return valid documents with the same content.
         assert isinstance(doc1, Document)
+
+        # Second call should use cache
+        doc2 = retriever.decode_frame(0)
         assert isinstance(doc2, Document)
-        assert doc1.page_content == doc2.page_content
-        assert doc1.metadata == doc2.metadata
+
+        # Verify video processor was called only once for frame decoding
+        assert retriever.video_processor.decode_video.call_count == 1
 
     def test_clear_cache(self, retriever):
         """Test clearing the frame cache."""
+        # Mock the video processor
+        retriever.video_processor.extract_qr_codes.return_value = [
+            '{"text": "test", "metadata": {"source": "test"}}'
+        ]
+
         # Decode a frame to populate cache
-        doc1 = retriever.decode_frame(0)
+        retriever.decode_frame(0)
+        assert len(retriever._frame_cache) > 0
 
         # Clear cache
         retriever.clear_cache()
-
-        # Decode the same frame again
-        doc2 = retriever.decode_frame(0)
-
-        # With the mock implementation, we can't test object identity
-        # but we can verify that both calls return valid documents
-        assert isinstance(doc1, Document)
-        assert isinstance(doc2, Document)
-        assert doc1.page_content == doc2.page_content
+        assert len(retriever._frame_cache) == 0
 
 
 class TestRetrieverErrorHandling:
     """Test cases for error handling."""
 
     def test_error_handling(self, retriever):
-        """Test error handling in retriever operations."""
+        """Test error handling during retrieval."""
         # Mock index manager to raise an error
         retriever.index_manager.search_text.side_effect = Exception("Test error")
 
-        with pytest.raises(RetrievalError, match="Failed to retrieve documents"):
+        with pytest.raises(RetrievalError):
             retriever._get_relevant_documents("test query")

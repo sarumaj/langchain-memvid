@@ -17,6 +17,9 @@ else:
 # Add the src directory to the Python path for autodoc
 sys.path.insert(0, os.path.abspath('../src'))
 
+# Add docs to include extensions
+sys.path.insert(0, os.path.abspath('.'))
+
 # -- Read configuration from pyproject.toml ----------------------------------
 
 # Get the project root directory (parent of docs/)
@@ -64,23 +67,17 @@ autodoc_typehints = sphinx_config.get('autodoc_typehints', 'description')
 autodoc_typehints_format = sphinx_config.get('autodoc_typehints_format', 'short')
 
 # Build intersphinx_mapping from arrays, adding None as second element if missing
-intersphinx_mapping = {}
-raw_mapping = sphinx_config.get('intersphinx_mapping', {})
-for key, value in raw_mapping.items():
-    if isinstance(value, list):
-        if len(value) == 1:
-            # Add None as second element if missing
-            intersphinx_mapping[key] = (value[0], None)
-        elif len(value) == 2:
-            intersphinx_mapping[key] = tuple(value)
-        else:
-            # Skip invalid entries
-            continue
+intersphinx_mapping = {
+    key: (value[0], value[1] if len(value) > 1 else None)
+    for key, value in sphinx_config.get('intersphinx_mapping', {}).items()
+    if isinstance(value, list)
+}
 
 # Napoleon settings
-for key, value in sphinx_config.items():
-    if key.startswith('napoleon_'):
-        globals()[key] = value
+globals().update({
+    key: value for key, value in sphinx_config.items()
+    if key.startswith('napoleon_')
+})
 
 # MyST settings
 myst_enable_extensions = sphinx_config.get('myst_enable_extensions', [])

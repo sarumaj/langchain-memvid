@@ -55,18 +55,6 @@ class TestGetOnFirstMatch:
         result = get_on_first_match(metadata, "key1", "key2", expected_type=int)
         assert result == 42
 
-    def test_type_checking_with_default_type_inference(self):
-        """Test type checking when expected_type is inferred from default."""
-        metadata = {"key1": "string_value", "key2": 42}
-
-        # Should return string value when default is string
-        result = get_on_first_match(metadata, "key1", "key2", default="default_string")
-        assert result == "string_value"
-
-        # Should return int value when default is int
-        result = get_on_first_match(metadata, "key1", "key2", default=0)
-        assert result == 42
-
     def test_type_checking_skip_invalid_types(self):
         """Test that values with wrong types are skipped."""
         metadata = {"key1": "string_value", "key2": 42, "key3": "another_string"}

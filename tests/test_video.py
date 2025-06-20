@@ -10,28 +10,9 @@ import cv2
 import qrcode
 
 from langchain_memvid.video import VideoProcessor
-from langchain_memvid.config import VideoConfig, QRCodeConfig, VideoBackend
+from langchain_memvid.config import VideoConfig, VideoBackend
 from langchain_memvid.exceptions import VideoProcessingError, QRCodeError
-
-
-@pytest.fixture
-def video_config():
-    """Create a test video configuration."""
-    return VideoConfig(
-        fps=30,
-        resolution=(640, 480),
-        codec="mp4v"
-    )
-
-
-@pytest.fixture
-def qrcode_config():
-    """Create a test QR code configuration."""
-    return QRCodeConfig(
-        error_correction="M",
-        box_size=10,
-        border=4
-    )
+from conftest import custom_parametrize
 
 
 @pytest.fixture
@@ -46,46 +27,36 @@ def video_processor(video_config, qrcode_config):
 class TestVideoBackendSelection:
     """Test cases for backend selection logic."""
 
-    def test_backend_selection(self):
+    @custom_parametrize(
+        "codec,expected_backend",
+        [
+            # OpenCV codecs
+            ("mp4v", VideoBackend.OPENCV),
+            ("mjpg", VideoBackend.OPENCV),
+            ("xvid", VideoBackend.OPENCV),
+            # FFmpeg codecs
+            ("libx264", VideoBackend.FFMPEG),
+            ("libx265", VideoBackend.FFMPEG),
+            ("h265", VideoBackend.FFMPEG),
+            ("av1", VideoBackend.FFMPEG),
+        ]
+    )
+    def test_backend_selection(self, codec, expected_backend):
         """Test automatic backend selection based on codec."""
-        # OpenCV codecs
-        config = VideoConfig(codec="mp4v")
-        assert config.backend == VideoBackend.OPENCV
+        config = VideoConfig(codec=codec)
+        assert config.backend == expected_backend
 
-        config = VideoConfig(codec="mjpg")
-        assert config.backend == VideoBackend.OPENCV
-
-        config = VideoConfig(codec="xvid")
-        assert config.backend == VideoBackend.OPENCV
-
-        # FFmpeg codecs
-        config = VideoConfig(codec="libx264")
-        assert config.backend == VideoBackend.FFMPEG
-
-        config = VideoConfig(codec="libx265")
-        assert config.backend == VideoBackend.FFMPEG
-
-        config = VideoConfig(codec="h265")
-        assert config.backend == VideoBackend.FFMPEG
-
-        config = VideoConfig(codec="av1")
-        assert config.backend == VideoBackend.FFMPEG
-
-    def test_backend_override(self):
+    @custom_parametrize(
+        "codec,override_backend,expected_backend",
+        [
+            ("mp4v", VideoBackend.FFMPEG, VideoBackend.FFMPEG),
+            ("libx264", VideoBackend.OPENCV, VideoBackend.OPENCV),
+        ]
+    )
+    def test_backend_override(self, codec, override_backend, expected_backend):
         """Test manual backend override."""
-        # Override to FFmpeg
-        config = VideoConfig(
-            codec="mp4v",
-            backend=VideoBackend.FFMPEG
-        )
-        assert config.backend == VideoBackend.FFMPEG
-
-        # Override to OpenCV
-        config = VideoConfig(
-            codec="libx264",
-            backend=VideoBackend.OPENCV
-        )
-        assert config.backend == VideoBackend.OPENCV
+        config = VideoConfig(codec=codec, backend=override_backend)
+        assert config.backend == expected_backend
 
 
 class TestVideoProcessorQRCodeOperations:

@@ -1,3 +1,5 @@
+"""Unit tests for the IndexManager class."""
+
 import pytest
 import numpy as np
 from pathlib import Path
@@ -6,7 +8,6 @@ from unittest.mock import MagicMock, call
 import faiss
 
 from langchain_memvid.index import IndexManager
-from langchain_memvid.config import IndexConfig
 from langchain_memvid.exceptions import MemVidIndexError
 
 
@@ -22,31 +23,9 @@ def mock_embeddings():
 
 
 @pytest.fixture
-def index_config():
-    """Create a test index configuration."""
-    return IndexConfig(
-        index_type="faiss",
-        metric="cosine",
-        nlist=2  # Using IVF index
-    )
-
-
-@pytest.fixture
 def index_manager(index_config, mock_embeddings):
     """Create an IndexManager instance for testing."""
     return IndexManager(config=index_config, embeddings=mock_embeddings)
-
-
-@pytest.fixture
-def test_texts():
-    """Create test texts for testing."""
-    return [f"test text {i}" for i in range(10)]
-
-
-@pytest.fixture
-def test_metadata():
-    """Create test metadata for testing."""
-    return [{"id": i, "text": f"test_{i}"} for i in range(10)]
 
 
 class TestIndexManagerTextOperations:
@@ -175,3 +154,136 @@ class TestIndexManagerMetadataOperations:
 
         with pytest.raises(MemVidIndexError):
             index_manager.get_metadata([100])  # Index out of range
+
+
+class TestIndexManagerDeletionOperations:
+    """Test cases for deletion operations."""
+
+    def test_delete_by_ids_success(self, index_manager):
+        """Test deleting documents by IDs successfully."""
+        # First add some documents
+        texts = ["test1", "test2", "test3"]
+        metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}]
+        index_manager.add_texts(texts, metadatas)
+
+        # Delete document with ID 1
+        result = index_manager.delete_by_ids([1])
+
+        assert result is True
+        assert len(index_manager._metadata) == 2
+        assert index_manager._metadata[0]["text"] == "test1"
+        assert index_manager._metadata[1]["text"] == "test3"
+
+    def test_delete_by_ids_multiple(self, index_manager):
+        """Test deleting multiple documents by IDs."""
+        # First add some documents
+        texts = ["test1", "test2", "test3", "test4"]
+        metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}, {"source": "doc4"}]
+        index_manager.add_texts(texts, metadatas)
+
+        # Delete documents with IDs 1 and 3
+        result = index_manager.delete_by_ids([1, 3])
+
+        assert result is True
+        assert len(index_manager._metadata) == 2
+        assert index_manager._metadata[0]["text"] == "test1"
+        assert index_manager._metadata[1]["text"] == "test3"
+
+    def test_delete_by_ids_empty_list(self, index_manager):
+        """Test deleting with empty IDs list."""
+        # Initialize the index first
+        index_manager.create_index()
+        result = index_manager.delete_by_ids([])
+        assert result is False
+
+    def test_delete_by_ids_invalid_ids(self, index_manager):
+        """Test deleting with invalid IDs."""
+        # Add some documents first
+        texts = ["test1", "test2"]
+        index_manager.add_texts(texts)
+
+        with pytest.raises(MemVidIndexError):
+            index_manager.delete_by_ids([100])  # Invalid ID
+
+    def test_delete_by_ids_index_not_initialized(self, index_manager):
+        """Test deleting when index is not initialized."""
+        with pytest.raises(MemVidIndexError):
+            index_manager.delete_by_ids([0])
+
+    def test_delete_by_texts_success(self, index_manager):
+        """Test deleting documents by texts successfully."""
+        # First add some documents
+        texts = ["test1", "test2", "test3"]
+        metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}]
+        index_manager.add_texts(texts, metadatas)
+
+        # Delete document with text "test2"
+        result = index_manager.delete_by_texts(["test2"])
+
+        assert result is True
+        assert len(index_manager._metadata) == 2
+        assert index_manager._metadata[0]["text"] == "test1"
+        assert index_manager._metadata[1]["text"] == "test3"
+
+    def test_delete_by_texts_multiple(self, index_manager):
+        """Test deleting multiple documents by texts."""
+        # First add some documents
+        texts = ["test1", "test2", "test3", "test4"]
+        metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}, {"source": "doc4"}]
+        index_manager.add_texts(texts, metadatas)
+
+        # Delete documents with texts "test2" and "test4"
+        result = index_manager.delete_by_texts(["test2", "test4"])
+
+        assert result is True
+        assert len(index_manager._metadata) == 2
+        assert index_manager._metadata[0]["text"] == "test1"
+        assert index_manager._metadata[1]["text"] == "test3"
+
+    def test_delete_by_texts_empty_list(self, index_manager):
+        """Test deleting with empty texts list."""
+        # Initialize the index first
+        index_manager.create_index()
+        result = index_manager.delete_by_texts([])
+        assert result is False
+
+    def test_delete_by_texts_not_found(self, index_manager):
+        """Test deleting texts that don't exist."""
+        # Add some documents first
+        texts = ["test1", "test2"]
+        index_manager.add_texts(texts)
+
+        result = index_manager.delete_by_texts(["nonexistent"])
+        assert result is False
+
+    def test_delete_by_texts_index_not_initialized(self, index_manager):
+        """Test deleting texts when index is not initialized."""
+        with pytest.raises(MemVidIndexError):
+            index_manager.delete_by_texts(["test"])
+
+    def test_get_all_documents(self, index_manager):
+        """Test getting all documents."""
+        # Add some documents
+        texts = ["test1", "test2", "test3"]
+        metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}]
+        index_manager.add_texts(texts, metadatas)
+
+        # Get all documents
+        documents = index_manager.get_all_documents()
+
+        assert len(documents) == 3
+        assert all(doc["text"] == text for doc, text in zip(documents, texts))
+
+    def test_get_all_documents_empty(self, index_manager):
+        """Test getting all documents when index is empty."""
+        documents = index_manager.get_all_documents()
+        assert len(documents) == 0
+
+    def test_get_document_count(self, index_manager):
+        """Test getting document count."""
+        # Add some documents
+        texts = ["test1", "test2", "test3"]
+        index_manager.add_texts(texts)
+
+        count = index_manager.get_document_count()
+        assert count == 3

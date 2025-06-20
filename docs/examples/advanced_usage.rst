@@ -16,4 +16,4 @@ The complete example demonstrates:
 * Building complete systems from components
 * Testing and verification of functionality
 
-For the interactive Jupyter notebook version, see :ref:`advanced-notebook`. 
+For the interactive Jupyter notebook version, see :doc:`notebooks`. 

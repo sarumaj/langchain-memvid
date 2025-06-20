@@ -4,11 +4,9 @@ Jupyter Notebook Examples
 Interactive Jupyter notebooks provide hands-on examples with detailed explanations and visual outputs.
 
 Quick Start Notebook
--------------------
+--------------------
 
 .. _quickstart-notebook:
-
-**File**: `quickstart.ipynb <../../examples/quickstart.ipynb>`_
 
 This notebook demonstrates the basic usage of the LangChain MemVid library:
 
@@ -17,16 +15,16 @@ This notebook demonstrates the basic usage of the LangChain MemVid library:
 * Performing similarity searches
 * Understanding the results and metadata
 
-**Download**: `examples/quickstart.ipynb <../../examples/quickstart.ipynb>`_
+.. only:: builder_html
 
-**Generated Python**: `examples/quickstart.py <../../examples/quickstart.py>`_
+    **Download**: :download:`examples/quickstart.ipynb <../../examples/quickstart.ipynb>`
+
+    **Generated Python**: :download:`examples/quickstart.py <../../examples/quickstart.py>`
 
 Advanced Usage Notebook
 -----------------------
 
 .. _advanced-notebook:
-
-**File**: `advanced.ipynb <../../examples/advanced.ipynb>`_
 
 This notebook covers advanced features and customization options:
 
@@ -36,9 +34,11 @@ This notebook covers advanced features and customization options:
 * Building complete systems from components
 * Testing and verification of functionality
 
-**Download**: `examples/advanced.ipynb <../../examples/advanced.ipynb>`_
+.. only:: builder_html
 
-**Generated Python**: `examples/advanced.py <../../examples/advanced.py>`_
+    **Download**: :download:`examples/advanced.ipynb <../../examples/advanced.ipynb>`
+
+    **Generated Python**: :download:`examples/advanced.py <../../examples/advanced.py>`
 
 Running the Notebooks
 ---------------------
@@ -48,17 +48,17 @@ To run these notebooks:
 1. Install the development dependencies:
 
    .. code-block:: bash
-      
+
       pip install -e ".[test]"
 
 2. Start Jupyter:
 
    .. code-block:: bash
-      
+
       jupyter notebook
 
 3. Navigate to the `examples/` directory and open the desired notebook
 
 4. Run all cells to see the examples in action
 
-Note: The Python files (`.py`) are automatically generated when the notebooks are executed. 
+Note: The Python files (`.py`) are automatically generated when the notebooks are executed.

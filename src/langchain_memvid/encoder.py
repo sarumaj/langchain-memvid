@@ -1,37 +1,31 @@
 """
-Encoder module for LangChain MemVid.
+Encodes text chunks and metadata as QR codes in video frames for MemVid.
 
-This module provides functionality for encoding text chunks into QR codes
-and managing the encoding process.
+- Adds new documents and builds video storage with QR codes.
+- Maintains mapping between document IDs and video frames for efficient deletion.
 """
 
 import orjson
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
 
 from .exceptions import EncodingError
 from .video import VideoProcessor
 from .index import IndexManager
 from .config import VectorStoreConfig, LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE, LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 from .logging import get_logger
+from .types import BuildStats
 
 logger = get_logger("encoder")
 
 
-@dataclass
-class BuildStats:
-    """Statistics for video build process."""
-    total_chunks: int
-    video_size_mb: float
-    encoding_time: float
-    index_path: Path
-    video_path: Path
-
-
 class Encoder:
-    """Handles encoding of text chunks into QR codes and video frames."""
+    """Encodes text chunks and metadata as QR codes in video frames for MemVid.
+
+    - Adds new documents and builds video storage with QR codes.
+    - Maintains mapping between document IDs and video frames for efficient deletion.
+    """
 
     def __init__(
         self,
@@ -100,20 +94,66 @@ class Encoder:
     ) -> BuildStats:
         """Build video from added chunks.
 
+        This method implements the hybrid storage approach and optimization strategies
+        for efficient video building and frame mapping.
+
+        Hybrid Storage Implementation
+        - Essential Metadata: Stores only essential metadata in FAISS for efficiency
+          - Document text, source, category, doc_id, metadata_hash
+          - Significant reduction in FAISS index size
+          - Fast search operations with minimal memory usage
+        - Full Metadata: Stores complete metadata in video QR codes
+          - All metadata fields and custom attributes
+          - Complete backup and archive functionality
+          - On-demand retrieval when needed
+
+        Optimization Strategies
+
+        Frame Index Mapping
+        - Bidirectional Mapping: Establishes doc_id ↔ frame_number mapping
+        - O(1) Lookup: Enables constant-time frame number retrieval
+        - Deletion Optimization: Allows precise frame-level deletion without full video rebuilds
+        - Consistency: Maintains synchronization between FAISS index and video frames
+
+        Performance Characteristics
+        - Encoding Time: Optimized for large document collections
+        - Memory Usage: Efficient processing of chunks and frames
+        - Storage Efficiency: Hybrid approach reduces overall storage requirements
+        - Quality: Maintains video quality while optimizing storage
+
+        Process Flow
+        1. Text Processing: Extract texts from chunks for FAISS indexing
+        2. FAISS Indexing: Add essential metadata to FAISS index
+        3. QR Code Generation: Create QR codes with full metadata
+        4. Frame Mapping: Establish bidirectional document-to-frame mapping
+        5. Video Encoding: Encode QR codes into video frames
+        6. Index Saving: Save FAISS index with frame mappings
+
         Args:
             output_file: Path to save the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
             index_dir: Path to save the index directory, defaults to LANGCHAIN_MEMVID_DEFAULT_INDEX_DIR
 
         Returns:
-            BuildStats: Statistics for the video build process
+            BuildStats: Statistics for the video build process including:
+            - total_chunks: Number of chunks encoded
+            - video_size_mb: Size of the video file in MB
+            - encoding_time: Time taken for encoding in seconds
+            - index_path: Path to the saved index
+            - video_path: Path to the saved video
 
         Raises:
             EncodingError: If video building fails
             ValueError: If output paths are invalid
 
         Example:
-            >>> stats = encoder.build_video(Path("output.mp4"), Path("index.json"))
-            >>> print(f"Encoded {stats['total_chunks']} chunks in {stats['encoding_time']:.2f}s")
+            # Build video with hybrid storage approach
+            stats = encoder.build_video(Path("output.mp4"), Path("index.d"))
+            print(f"Encoded {stats.total_chunks} chunks in {stats.encoding_time:.2f}s")
+            print(f"Video size: {stats.video_size_mb:.2f} MB")
+
+            # Check frame mapping statistics
+            frame_stats = encoder.index_manager.get_frame_mapping_stats()
+            print(f"Frame mapping coverage: {frame_stats['mapping_coverage']:.1f}%")
         """
         try:
             # Validate paths
@@ -138,12 +178,15 @@ class Encoder:
 
             # Create QR codes for each chunk
             qr_frames = []
-            for chunk in self._chunks:
+            for i, chunk in enumerate(self._chunks):
                 # Convert chunk to JSON string
                 chunk_data = orjson.dumps(chunk, option=orjson.OPT_NON_STR_KEYS).decode()
                 # Create QR code
                 qr_frame = self.video_processor.create_qr_code(chunk_data)
                 qr_frames.append(qr_frame)
+
+                # Set frame mapping for efficient deletion
+                self.index_manager.set_frame_mapping(i, len(qr_frames) - 1)
 
             # Encode video
             self.video_processor.encode_video(

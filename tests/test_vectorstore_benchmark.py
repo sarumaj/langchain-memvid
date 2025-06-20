@@ -9,51 +9,12 @@ import random
 import string
 
 from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
 
 from langchain_memvid.vectorstore import VectorStore
 from langchain_memvid.config import VectorStoreConfig
 
-
-class BenchmarkEmbeddings(Embeddings):
-    """Embeddings implementation for benchmarking with realistic vector generation."""
-
-    def __init__(self, dimension: int = 384):
-        """Initialize with specified dimension."""
-        self.dimension = dimension
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for documents."""
-        embeddings = []
-        for text in texts:
-            # Generate deterministic but varied embeddings based on text content
-            random.seed(hash(text) % 2**32)
-            embedding = [random.uniform(-1, 1) for _ in range(self.dimension)]
-            # Normalize to unit vector
-            norm = sum(x*x for x in embedding) ** 0.5
-            embedding = [x/norm for x in embedding]
-            embeddings.append(embedding)
-        return embeddings
-
-    def embed_query(self, text: str) -> List[float]:
-        """Generate embedding for a single query."""
-        return self.embed_documents([text])[0]
-
-
-def generate_test_texts(count: int, min_length: int = 50, max_length: int = 200) -> List[str]:
-    """Generate test texts of varying lengths."""
-    texts = []
-    for i in range(count):
-        length = random.randint(min_length, max_length)
-        # Generate realistic text with words
-        words = []
-        for _ in range(length // 5):  # Approximate 5 chars per word
-            word_length = random.randint(3, 12)
-            word = ''.join(random.choices(string.ascii_lowercase, k=word_length))
-            words.append(word)
-        text = ' '.join(words)
-        texts.append(text)
-    return texts
+# Import shared test utilities from conftest
+from conftest import generate_test_texts, BenchmarkEmbeddings
 
 
 def generate_test_queries(count: int, min_length: int = 10, max_length: int = 50) -> List[str]:
@@ -67,12 +28,6 @@ def benchmark_temp_dir():
     temp_dir = tempfile.mkdtemp()
     yield Path(temp_dir)
     shutil.rmtree(temp_dir)
-
-
-@pytest.fixture
-def benchmark_embeddings():
-    """Create embeddings instance for benchmarking."""
-    return BenchmarkEmbeddings(dimension=384)
 
 
 @pytest.fixture

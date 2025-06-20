@@ -69,8 +69,24 @@ results = [
     {
         "query": query,
         "content": doc.page_content,
-        **{k: v for k, v in doc.metadata.items() if k != "text"}
+        **{k: v for k, v in doc.metadata.items() if k != "text" and v is not None}
     }
     for query in queries
-    for doc in vs.similarity_search(query, k=2)
+    for doc in vs.similarity_search(query, k=2, include_full_metadata=True)
+]
+
+# Removing content
+# Let's us remove some of the documents and re-run the simiarity search.
+
+# Remove every second document
+vs.delete_by_texts(texts[::2])
+# Re-run the similarity search
+results = [
+    {
+        "query": query,
+        "content": doc.page_content,
+        **{k: v for k, v in doc.metadata.items() if k != "text" and v is not None}
+    }
+    for query in queries
+    for doc in vs.similarity_search(query, k=2, include_full_metadata=True)
 ]

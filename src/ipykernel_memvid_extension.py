@@ -9,7 +9,7 @@ import importlib
 try:
     module = importlib.import_module('IPython')
     IPYTHON_INSTALLED = True and module is not None
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     IPYTHON_INSTALLED = False
 
 if IPYTHON_INSTALLED:
@@ -52,8 +52,10 @@ if IPYTHON_INSTALLED:
         except (ImportError, ModuleNotFoundError):
             if shell is None:
                 shell = get_ipython()
-            shell.run_line_magic('pip', f'install {package_name if package_name else name}')
-            return importlib.import_module(name)
+            if shell is not None:
+                shell.run_line_magic('pip', f'install {package_name if package_name else name}')
+                return importlib.import_module(name)
+            return None
 
     chime = ensure_import_module('chime')                             # required for sound notifications
     ipywidgets = ensure_import_module('ipywidgets')                   # required for tqdm (progress bar)

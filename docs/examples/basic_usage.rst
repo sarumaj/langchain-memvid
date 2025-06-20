@@ -16,4 +16,4 @@ The complete example demonstrates:
 * Performing similarity searches
 * Retrieving results with metadata
 
-For the interactive Jupyter notebook version, see :ref:`quickstart-notebook`. 
+For the interactive Jupyter notebook version, see :doc:`notebooks`. 
