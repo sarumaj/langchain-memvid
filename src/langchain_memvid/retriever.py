@@ -177,17 +177,20 @@ class Retriever(BaseRetriever, BaseModel):
         This method implements the hybrid storage approach for optimal search performance:
 
         Hybrid Storage Implementation
+
         - Essential Metadata Only: Returns documents with minimal metadata from FAISS
         - Fast Search: Leverages FAISS capabilities for sub-second search
         - Metadata Structure: Includes text, source, category, doc_id, metadata_hash
         - Metadata Type Flag: Sets "metadata_type": "essential" for identification
 
         Performance Optimizations
+
         - Progress Bar: Shows progress for large result sets (>10 documents)
         - Memory Efficient: Processes results in batches to avoid memory issues
         - Caching: Leverages frame caching for repeated access
 
         Metadata Structure
+
         - source: Document source
         - category: Document category
         - similarity: Similarity score
@@ -258,12 +261,14 @@ class Retriever(BaseRetriever, BaseModel):
         This method supports the hybrid storage approach with flexible metadata retrieval:
 
         - Essential Metadata Only (include_full_metadata=False): Fast retrieval from FAISS index
+
           - Document text, source, category, doc_id, metadata_hash
           - O(1) lookup time from FAISS
           - Minimal memory usage
           - Metadata type: "essential"
 
         - Full Metadata (include_full_metadata=True): Complete metadata from video storage
+
           - All metadata fields and custom attributes
           - Requires video frame decoding
           - Complete data access with integrity checking
@@ -316,23 +321,27 @@ class Retriever(BaseRetriever, BaseModel):
         This method implements the full metadata retrieval component of the hybrid storage approach:
 
         Hybrid Storage Implementation
+
         - Video Decoding: Decodes specific video frames to extract complete metadata
         - Frame Mapping: Uses document-to-frame mapping for efficient frame location
         - Complete Data: Retrieves all metadata fields and custom attributes
         - Fallback Mechanism: Provides complete data access when FAISS data is insufficient
 
         Performance Characteristics
+
         - Frame Lookup: O(1) lookup using frame mapping
         - Video Decoding: Additional processing time for frame decoding and QR code processing
         - Memory Usage: Medium (requires frame decoding and QR code processing)
 
         Error Handling
+
         - Returns None if frame mapping is not available
         - Returns None if video decoding fails
         - Logs warnings for debugging purposes
         - Graceful degradation when video data is corrupted
 
         Use Cases
+
         - Complete Metadata Access: When all metadata fields are required
         - Data Integrity Verification: When FAISS data needs validation
         - Backup Recovery: When FAISS index is corrupted or incomplete

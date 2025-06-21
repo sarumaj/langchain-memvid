@@ -71,10 +71,13 @@ class IndexManager:
     Hybrid Storage Approach
 
     - Essential Metadata Only: Stores only essential metadata in FAISS for efficiency
+
       - Document text, source, category, doc_id, metadata_hash
       - Significant reduction in FAISS index size compared to full metadata storage
       - Fast search operations with minimal memory usage
+
     - Full Metadata in Video: Complete metadata stored in video QR codes
+
       - All metadata fields and custom attributes
       - Complete backup and archive functionality
       - On-demand retrieval when needed
@@ -84,11 +87,13 @@ class IndexManager:
     The index manager implements optimized deletion strategies to avoid full video rebuilds:
 
     Frame Index Mapping
+
     - Maintains bidirectional mapping between document IDs and frame numbers
     - Enables O(1) lookup for frame numbers given document IDs
     - Allows precise frame-level deletion without full video rebuilds
 
     Performance Characteristics
+
     - Search Performance: Sub-second search with essential metadata
     - Storage Efficiency: Significant reduction in FAISS index size
     - Deletion Performance: O(k) time complexity where k = frames to delete
@@ -463,18 +468,21 @@ class IndexManager:
         which is essential for optimized deletion strategies.
 
         Frame Index Mapping
-        - Bidirectional Mapping: doc_id ↔ frame_number for efficient lookups
+
+        - Bidirectional Mapping: doc_id frame_number for efficient lookups
         - O(1) Lookup: Enables constant-time frame number retrieval
         - Deletion Optimization: Allows precise frame-level deletion without full video rebuilds
         - Consistency: Maintains synchronization between FAISS index and video frames
 
         Performance Benefits
+
         - Fast Deletion: O(k) time complexity where k = frames to delete
         - Memory Efficient: Minimal memory overhead for mapping storage
         - Scalable: Efficient for large document collections
         - Reliable: Provides fallback mechanisms when mappings are corrupted
 
         Use Cases
+
         - Optimized Deletion: Enables selective frame removal from videos
         - Frame Lookup: Fast retrieval of frame numbers for document IDs
         - Document Lookup: Fast retrieval of document IDs for frame numbers
@@ -526,18 +534,21 @@ class IndexManager:
         precise frame-level deletion without full video rebuilds.
 
         Optimization Strategy
+
         - Frame Mapping Lookup: Uses O(1) lookup to find frame numbers for document IDs
         - Safe Deletion Order: Returns frames in reverse order for safe deletion
         - Efficient Processing: Processes multiple document IDs in a single operation
         - Error Handling: Gracefully handles missing frame mappings
 
         Performance Characteristics
+
         - Lookup Time: O(k) where k = number of document IDs
         - Memory Usage: Minimal temporary storage for frame numbers
         - Scalability: Efficient for large-scale deletions
         - Reliability: Handles missing mappings gracefully
 
         Use Cases
+
         - Video Frame Removal: Provides frame numbers for selective video editing
         - Optimized Deletion: Enables efficient document removal without full rebuilds
         - Batch Processing: Supports deletion of multiple documents at once

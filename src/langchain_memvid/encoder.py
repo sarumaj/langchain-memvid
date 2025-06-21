@@ -98,37 +98,44 @@ class Encoder:
         for efficient video building and frame mapping.
 
         Hybrid Storage Implementation
-            - Essential Metadata: Stores only essential metadata in FAISS for efficiency
-                - Document text, source, category, doc_id, metadata_hash
-                - Significant reduction in FAISS index size
-                - Fast search operations with minimal memory usage
-            - Full Metadata: Stores complete metadata in video QR codes
-                - All metadata fields and custom attributes
-                - Complete backup and archive functionality
-                - On-demand retrieval when needed
-                - Metadata is stored in the video QR codes
+
+        - Essential Metadata: Stores only essential metadata in FAISS for efficiency
+
+          - Document text, source, category, doc_id, metadata_hash
+          - Significant reduction in FAISS index size
+          - Fast search operations with minimal memory usage
+
+        - Full Metadata: Stores complete metadata in video QR codes
+
+          - All metadata fields and custom attributes
+          - Complete backup and archive functionality
+          - On-demand retrieval when needed
+          - Metadata is stored in the video QR codes
 
         Optimization Strategies
 
         Frame Index Mapping
-            - Bidirectional Mapping: Establishes doc_id frame_number mapping
-            - O(1) Lookup: Enables constant-time frame number retrieval
-            - Deletion Optimization: Allows precise frame-level deletion without full video rebuilds
-            - Consistency: Maintains synchronization between FAISS index and video frames
+
+        - Bidirectional Mapping: Establishes doc_id frame_number mapping
+        - O(1) Lookup: Enables constant-time frame number retrieval
+        - Deletion Optimization: Allows precise frame-level deletion without full video rebuilds
+        - Consistency: Maintains synchronization between FAISS index and video frames
 
         Performance Characteristics
-            - Encoding Time: Optimized for large document collections
-            - Memory Usage: Efficient processing of chunks and frames
-            - Storage Efficiency: Hybrid approach reduces overall storage requirements
-            - Quality: Maintains video quality while optimizing storage
+
+        - Encoding Time: Optimized for large document collections
+        - Memory Usage: Efficient processing of chunks and frames
+        - Storage Efficiency: Hybrid approach reduces overall storage requirements
+        - Quality: Maintains video quality while optimizing storage
 
         Process Flow
-            1. Text Processing: Extract texts from chunks for FAISS indexing
-            2. FAISS Indexing: Add essential metadata to FAISS index
-            3. QR Code Generation: Create QR codes with full metadata
-            4. Frame Mapping: Establish bidirectional document-to-frame mapping
-            5. Video Encoding: Encode QR codes into video frames
-            6. Index Saving: Save FAISS index with frame mappings
+
+        1. Text Processing: Extract texts from chunks for FAISS indexing
+        2. FAISS Indexing: Add essential metadata to FAISS index
+        3. QR Code Generation: Create QR codes with full metadata
+        4. Frame Mapping: Establish bidirectional document-to-frame mapping
+        5. Video Encoding: Encode QR codes into video frames
+        6. Index Saving: Save FAISS index with frame mappings
 
         Args:
             output_file: Path to save the video file, defaults to LANGCHAIN_MEMVID_DEFAULT_VIDEO_FILE
@@ -136,6 +143,7 @@ class Encoder:
 
         Returns:
             BuildStats: Statistics for the video build process including:
+
             - total_chunks: Number of chunks encoded
             - video_size_mb: Size of the video file in MB
             - encoding_time: Time taken for encoding in seconds

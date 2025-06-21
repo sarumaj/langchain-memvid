@@ -5,6 +5,7 @@ This implementation stores documents as QR codes in video frames with semantic s
 capabilities using FAISS index.
 
 The vector store implements a hybrid storage approach:
+
 - FAISS Index: Stores essential metadata (text, source, category, doc_id, metadata_hash) for fast search
 - Video Storage: Stores complete document data as QR codes with all metadata fields
 
@@ -53,6 +54,7 @@ class VectorStore(VectorStore):
     in a video file. It provides semantic search capabilities using FAISS index.
 
     The vector store implements a hybrid storage approach:
+
     - FAISS Index: Stores essential metadata for fast search operations
     - Video Storage: Stores complete document data as QR codes with all metadata fields
 
