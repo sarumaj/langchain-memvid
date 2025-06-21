@@ -723,9 +723,9 @@ if IPYTHON_INSTALLED:
             source_code = json.loads(source.read_text())
             cells = source_code.get("cells", [])
             selected_indices = list(range(len(cells)))
-            if (range_spec := args.range_spec):
+            if args.range_spec:
                 try:
-                    selected_indices = self._parse_cell_range(range_spec, len(cells))
+                    selected_indices = self._parse_cell_range(args.range_spec, len(cells))
                     cells = [cells[i] for i in selected_indices]
                 except ValueError as e:
                     DisplayContainer.ALERT.display(
