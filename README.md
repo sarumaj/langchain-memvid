@@ -8,6 +8,10 @@
 
 A Langchain implementation for Memvid, enabling efficient video-based document storage and retrieval using vector embeddings.
 
+> Memvid revolutionizes AI memory management by encoding text data into videos, enabling lightning-fast semantic search across millions of text chunks with sub-second retrieval times. Unlike traditional vector databases that consume massive amounts of RAM and storage, Memvid compresses your knowledge base into compact video files while maintaining instant access to any piece of information.
+>
+> <cite>[Saleban Olow](https://github.com/Olow304)</cite>, author of [memvid](https://github.com/Olow304/memvid), 5th of June, 2025
+
 ## Overview
 
 Langchain Memvid is a powerful tool that combines the capabilities of Langchain with video-based document storage. It allows you to store text chunks in video frames using QR codes and retrieve them efficiently using vector similarity search. This approach provides a unique way to store and retrieve information while maintaining visual accessibility.
