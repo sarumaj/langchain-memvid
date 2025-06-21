@@ -188,15 +188,13 @@ class Retriever(BaseRetriever, BaseModel):
         - Caching: Leverages frame caching for repeated access
 
         Metadata Structure
-        metadata = {
-            "source": "document_source",
-            "category": "document_category",
-            "similarity": 0.95,
-            "doc_id": 123,
-            "metadata_hash": "hash_value",
-            "metadata_type": "essential",
-            # ... other essential fields
-        }
+        - source: Document source
+        - category: Document category
+        - similarity: Similarity score
+        - doc_id: Document ID
+        - metadata_hash: Metadata hash
+        - metadata_type: Metadata type
+        - ... other essential fields
 
         Args:
             query: Query string
@@ -206,15 +204,6 @@ class Retriever(BaseRetriever, BaseModel):
 
         Raises:
             RetrievalError: If retrieval fails
-
-        Example:
-            # Fast search with essential metadata
-            docs = retriever._get_relevant_documents("query text")
-            for doc in docs:
-                print(f"Text: {doc.page_content}")
-                print(f"Source: {doc.metadata.get('source')}")
-                print(f"Similarity: {doc.metadata.get('similarity')}")
-                print(f"Metadata type: {doc.metadata.get('metadata_type')}")
         """
         try:
             # Use IndexManager's search_text method which leverages FAISS capabilities
@@ -268,32 +257,17 @@ class Retriever(BaseRetriever, BaseModel):
 
         This method supports the hybrid storage approach with flexible metadata retrieval:
 
-        Hybrid Storage Approach
         - Essential Metadata Only (include_full_metadata=False): Fast retrieval from FAISS index
           - Document text, source, category, doc_id, metadata_hash
           - O(1) lookup time from FAISS
           - Minimal memory usage
           - Metadata type: "essential"
+
         - Full Metadata (include_full_metadata=True): Complete metadata from video storage
           - All metadata fields and custom attributes
           - Requires video frame decoding
           - Complete data access with integrity checking
           - Metadata type: "full"
-
-        Performance Characteristics
-        - Essential metadata provides faster retrieval with minimal memory usage
-        - Full metadata provides complete data access with additional processing time
-        - Memory usage is optimized for essential metadata operations
-
-        Data Integrity
-        - Metadata Hash: Essential metadata includes hash for integrity verification
-        - Automatic Fallback: Falls back to video storage if FAISS data is corrupted
-        - Complete Backup: Full metadata always available in video storage
-
-        Error Handling
-        - Returns None if document is not found
-        - Handles corrupted metadata gracefully
-        - Provides fallback mechanisms for data recovery
 
         Args:
             doc_id: Document ID
@@ -304,22 +278,6 @@ class Retriever(BaseRetriever, BaseModel):
 
         Raises:
             RetrievalError: If retrieval fails
-
-        Example:
-            # Fast retrieval with essential metadata
-            doc = retriever.get_document_by_id(123, include_full_metadata=False)
-            if doc:
-                print(f"Text: {doc.page_content}")
-                print(f"Source: {doc.metadata.get('source')}")
-                print(f"Metadata type: {doc.metadata.get('metadata_type')}")
-
-            # Complete retrieval with full metadata
-            doc_full = retriever.get_document_by_id(123, include_full_metadata=True)
-            if doc_full:
-                print(f"Author: {doc_full.metadata.get('author')}")
-                print(f"Tags: {doc_full.metadata.get('tags')}")
-                print(f"All fields: {list(doc_full.metadata.keys())}")
-                print(f"Metadata type: {doc_full.metadata.get('metadata_type')}")
         """
         try:
             # Get essential metadata from FAISS index
@@ -385,16 +343,6 @@ class Retriever(BaseRetriever, BaseModel):
 
         Returns:
             Full metadata dictionary if found, None otherwise
-
-        Example:
-            # Get full metadata for a document
-            full_metadata = retriever._get_full_metadata_from_video(123)
-            if full_metadata:
-                print(f"Author: {full_metadata.get('author')}")
-                print(f"Tags: {full_metadata.get('tags')}")
-                print(f"All fields: {list(full_metadata.keys())}")
-            else:
-                print("Full metadata not available")
         """
         try:
             # Get frame number for this document

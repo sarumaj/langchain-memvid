@@ -51,6 +51,9 @@ extensions = sphinx_config.get('extensions', [])
 # Templates and static files
 templates_path = sphinx_config.get('templates_path', ['_templates'])
 html_static_path = sphinx_config.get('html_static_path', ['_static'])
+for path in html_static_path:
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 # Exclude patterns
 exclude_patterns = sphinx_config.get('exclude_patterns', ['_build', 'Thumbs.db', '.DS_Store'])

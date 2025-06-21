@@ -129,5 +129,4 @@ exclude_members = "__weakref__"
 [tool.sphinx.intersphinx_mapping]
 python = ["https://docs.python.org/3/"]
 langchain = ["https://api.python.langchain.com/en/latest/"]
-opencv = ["https://docs.opencv.org/4.x/"]
 faiss = ["https://faiss.ai/"]

@@ -3,6 +3,7 @@ Manages the FAISS vector index and essential metadata for MemVid.
 
 - Stores essential metadata for fast search.
 - Maintains bidirectional mapping between document IDs and video frame numbers for efficient deletion.
+
 This module provides functionality for managing vector indices used in LangChain MemVid,
 including FAISS index creation, updating, and searching.
 """
