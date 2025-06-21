@@ -616,7 +616,6 @@ if IPYTHON_INSTALLED:
                 %cleanup -f
             """
             args = parse_argstring(self.cleanup, parameter_s)
-            force = args.force
 
             # Collect unique named Path objects from the user's namespace
             garbage = {k for k, v in self.shell.user_ns.items() if isinstance(v, Path)}
@@ -630,7 +629,7 @@ if IPYTHON_INSTALLED:
                     self.shell.user_ns.pop(name, None)
                 if obj in RegisterPathFunc.paths:
                     RegisterPathFunc.paths.remove(obj)
-                if delete_path(obj, force=force):
+                if delete_path(obj, force=args.force):
                     removed[name] = lookup.pop(name)
 
             if not removed:
