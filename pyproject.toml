@@ -19,7 +19,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 dependencies = [
-    "faiss-cpu==1.11.0",
+    "faiss-cpu==1.12.0",
     "langchain-core==0.3.76",
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
