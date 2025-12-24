@@ -36,7 +36,7 @@ test = [
     "pytest-benchmark==5.2.3"
 ]
 docs = [
-    "sphinx<9.0.0", # compatible with myst-parser 4.0.1
+    "sphinx<9.0.5", # compatible with myst-parser 4.0.1
     "sphinx-rtd-theme==3.0.2",
     "sphinx-autodoc-typehints<3.6.0", # compatible with Sphinx <9
     "myst-parser==4.0.1",
