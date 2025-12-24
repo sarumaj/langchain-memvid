@@ -38,7 +38,7 @@ test = [
 docs = [
     "sphinx<9.0.0", # compatible with myst-parser 4.0.1
     "sphinx-rtd-theme==3.0.2",
-    "sphinx-autodoc-typehints<3.6.0", # compatible with Sphinx <9
+    "sphinx-autodoc-typehints<3.6.1", # compatible with Sphinx <9
     "myst-parser==4.0.1",
     "tomli==2.3.0"
 ]
