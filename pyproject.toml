@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "faiss-cpu==1.13.2",
-    "langchain-core==1.2.23",
+    "langchain-core==1.2.24",
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
     "opencv-contrib-python==4.13.0.92",
