@@ -20,27 +20,27 @@ classifiers = [
 ]
 dependencies = [
     "faiss-cpu==1.13.2",
-    "langchain-core==1.2.5",
+    "langchain-core==1.3.0",
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
-    "opencv-contrib-python==4.12.0.88",
-    "orjson==3.11.5",
-    "pydantic==2.12.5",
-    "tqdm==4.67.1"
+    "opencv-contrib-python==4.13.0.92",
+    "orjson==3.11.8",
+    "pydantic==2.13.2",
+    "tqdm==4.67.3"
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest==9.0.2",
+    "pytest==9.0.3",
     "pytest-asyncio==1.3.0",
     "pytest-benchmark==5.2.3"
 ]
 docs = [
     "sphinx<9.0.0", # compatible with myst-parser 4.0.1
-    "sphinx-rtd-theme==3.0.2",
-    "sphinx-autodoc-typehints<3.6.0", # compatible with Sphinx <9
+    "sphinx-rtd-theme==3.1.0",
+    "sphinx-autodoc-typehints<3.10.3", # compatible with Sphinx <9
     "myst-parser==4.0.1",
-    "tomli==2.3.0"
+    "tomli==2.4.1"
 ]
 
 [tool.setuptools.packages.find]
