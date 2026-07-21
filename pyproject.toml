@@ -23,7 +23,7 @@ dependencies = [
     "langchain-core==1.2.5",
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
-    "opencv-contrib-python==4.12.0.88",
+    "opencv-contrib-python==5.0.0.93",
     "orjson==3.11.5",
     "pydantic==2.12.5",
     "tqdm==4.67.1"
