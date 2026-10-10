@@ -24,8 +24,8 @@ dependencies = [
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
     "opencv-contrib-python==4.14.0.94",
-    "orjson==3.12.0",
-    "pydantic==2.13.5",
+    "orjson==3.13.0",
+    "pydantic==2.14.0",
     "tqdm==4.70.1"
 ]
 
@@ -40,7 +40,7 @@ docs = [
     "sphinx-rtd-theme==3.1.0",
     "sphinx-autodoc-typehints<3.13.10", # compatible with Sphinx <9
     "myst-parser==4.0.1",
-    "tomli==2.4.1"
+    "tomli==2.5.0"
 ]
 
 [tool.setuptools.packages.find]
