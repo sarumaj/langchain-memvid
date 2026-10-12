@@ -1,0 +1,91 @@
+# Converted from .github/workflows/release.yml for Forgejo by
+# scripts/github_to_forgejo.py (HomeLab); --move-ci rewrites it. Jobs needing
+# GitHub, macOS, Windows or secrets Forgejo lacks stay in the GitHub file.
+name: release
+'on':
+  push:
+    tags:
+    - v*
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: https://github.com/actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - name: Set up Python
+      uses: https://github.com/actions/setup-python@v7
+      with:
+        python-version: '3.15'
+    - name: Extract version from tag
+      id: version
+      run: |
+        TAG="${GITHUB_REF#refs/tags/}"
+        VERSION="${TAG#v}"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+    - name: Update version
+      run: |
+        sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+      shell: bash
+    - name: Cache pip packages
+      uses: https://github.com/actions/cache@v6
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build ipython jupyter
+        pip install -e .[test]
+        pip uninstall -y langchain-memvid
+    - name: Setup ffmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+    - name: Run tests
+      run: |
+        pytest
+    - name: Build package
+      run: python -m build
+    - name: Publish package
+      uses: https://github.com/pypa/gh-action-pypi-publish@v1.14.2
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_TOKEN }}
+        skip-existing: true
+    - name: Collect the release files
+      shell: bash
+      run: |
+        mkdir -p .forgejo-release
+    - name: Write the release notes
+      id: release_notes
+      shell: bash
+      env:
+        TAG: ${{ github.ref_name }}
+      run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+          git fetch --quiet --unshallow --tags
+        else
+          git fetch --quiet --tags
+        fi
+        previous=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+        {
+          echo 'notes<<END_OF_NOTES'
+          git log --no-merges --format='- %s' ${previous:+"$previous.."}"$TAG"
+          echo END_OF_NOTES
+        } >> "$GITHUB_OUTPUT"
+    - name: Publish the release
+      uses: https://code.forgejo.org/actions/forgejo-release@v2
+      with:
+        direction: upload
+        url: ${{ github.server_url }}
+        repo: ${{ github.repository }}
+        tag: ${{ github.ref_name }}
+        title: ${{ github.ref_name }}
+        release-dir: .forgejo-release
+        prerelease: 'false'
+        override: false
+        release-notes: ${{ steps.release_notes.outputs.notes }}
