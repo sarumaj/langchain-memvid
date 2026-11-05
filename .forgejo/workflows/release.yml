@@ -72,9 +72,14 @@ jobs:
           git fetch --quiet --tags
         fi
         previous=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+        notes=$(awk -v v="${TAG#v}" '/^## / { if (found) exit; h = $2; gsub(/^\[|\]$/, "", h); sub(/^v/, "", h)
+          if (h == v) { found = 1; next } } found' CHANGELOG.md 2>/dev/null | sed '/./,$!d' || true)
+        if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+          notes=$(git log --no-merges --format='- %s' ${previous:+"$previous.."}"$TAG")
+        fi
         {
           echo 'notes<<END_OF_NOTES'
-          git log --no-merges --format='- %s' ${previous:+"$previous.."}"$TAG"
+          printf '%s\n' "$notes"
           echo END_OF_NOTES
         } >> "$GITHUB_OUTPUT"
     - name: Publish the release
