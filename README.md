@@ -1,5 +1,5 @@
-[![release](https://github.com/sarumaj/langchain-memvid/actions/workflows/release.yml/badge.svg)](https://github.com/sarumaj/langchain-memvid/actions/workflows/release.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/sarumaj/langchain-memvid?logo=github)](https://github.com/sarumaj/langchain-memvid/releases/latest)
+[![test](https://git.ciepiela.org/dawid/langchain-memvid/actions/workflows/test.yml/badge.svg)](https://git.ciepiela.org/dawid/langchain-memvid/actions?workflow=test.yml)
+[![Release](https://img.shields.io/gitea/v/release/dawid/langchain-memvid?gitea_url=https%3A%2F%2Fgit.ciepiela.org&logo=forgejo)](https://git.ciepiela.org/dawid/langchain-memvid/releases/latest)
 [![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/sarumaj/langchain-memvid)](https://github.com/sarumaj/langchain-memvid/blob/main/pyproject.toml)
 
 ---
