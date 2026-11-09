@@ -15,20 +15,39 @@ from langchain_memvid.logging import (
 
 @pytest.fixture(autouse=True)
 def clear_loggers():
-    """Clear all loggers before each test to ensure clean state."""
-    # Remove all handlers from the root logger
-    root_logger = logging.getLogger(LOGGER_PREFIX)
-    for handler in root_logger.handlers.copy():
-        root_logger.removeHandler(handler)
+    """Reset the package's loggers to a pristine state for each test.
 
-    # Clear any child loggers
-    for name in list(logging.Logger.manager.loggerDict.keys()):
-        if name.startswith(LOGGER_PREFIX):
-            logger = logging.getLogger(name)
-            for handler in logger.handlers.copy():
-                logger.removeHandler(handler)
+    The package logger is configured at import and does not propagate. Since
+    pytest 9.1, the log capture attaches its handlers to every non-propagating
+    logger when a test phase starts, i.e. after this fixture ran. Removing the
+    handlers alone would leave the logger non-propagating, so pytest would hand
+    it its own handlers again and setup_logger would see a configured logger.
+    Resetting the propagation too keeps pytest's handlers on the root logger.
+    The previous state is restored afterwards for the other test modules.
+    """
+    loggers = [
+        lg
+        for name, lg in list(logging.Logger.manager.loggerDict.items())
+        if isinstance(lg, logging.Logger)
+        and (name == LOGGER_PREFIX or name.startswith(f"{LOGGER_PREFIX}."))
+    ]
+    saved = [(lg, lg.handlers.copy(), lg.level, lg.propagate) for lg in loggers]
+
+    for lg in loggers:
+        for handler in lg.handlers.copy():
+            lg.removeHandler(handler)
+        lg.setLevel(logging.NOTSET)
+        lg.propagate = True
 
     yield
+
+    for lg, handlers, level, propagate in saved:
+        for handler in lg.handlers.copy():
+            lg.removeHandler(handler)
+        for handler in handlers:
+            lg.addHandler(handler)
+        lg.setLevel(level)
+        lg.propagate = propagate
 
 
 class TestLogLevelFilter:
