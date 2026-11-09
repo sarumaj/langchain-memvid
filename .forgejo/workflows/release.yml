@@ -67,12 +67,16 @@ jobs:
         pytest
     - name: Build package
       run: python -m build
+    # twine, not pypa/gh-action-pypi-publish: that action is a Docker container, to which
+    # Forgejo's runner does not pass the step summary's file, and it fails writing there.
     - name: Publish package
-      uses: https://github.com/pypa/gh-action-pypi-publish@v1.14.3
-      with:
-        user: __token__
-        password: ${{ secrets.PYPI_TOKEN }}
-        skip-existing: true
+      shell: bash
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: |
+        python3 -m pip install --quiet twine
+        python3 -m twine upload --disable-progress-bar --skip-existing dist/*
     - name: Collect the release files
       shell: bash
       run: |
