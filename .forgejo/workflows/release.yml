@@ -78,10 +78,17 @@ jobs:
         python3 -m pip install --quiet twine
         python3 -m twine upload --disable-progress-bar --skip-existing dist/*
     - name: Collect the release files
+      # The tag's commit, for the release: forgejo-release refuses a tag that points
+      # elsewhere than the commit it is given, by default the run's (a retry from main).
+      id: release_files
       shell: bash
+      env:
+        TAG: ${{ inputs.tag || github.ref_name }}
       run: |
         mkdir -p .forgejo-release
         cp dist/* .forgejo-release/
+        git fetch --quiet --force origin "+refs/tags/$TAG:refs/tags/$TAG"
+        echo "sha=$(git rev-parse "refs/tags/$TAG^{commit}")" >> "$GITHUB_OUTPUT"
     - name: Write the release notes
       id: release_notes
       shell: bash
@@ -111,6 +118,7 @@ jobs:
         url: ${{ github.server_url }}
         repo: ${{ github.repository }}
         tag: ${{ inputs.tag || github.ref_name }}
+        sha: ${{ steps.release_files.outputs.sha }}
         title: ${{ inputs.tag || github.ref_name }}
         release-dir: .forgejo-release
         prerelease: 'false'
