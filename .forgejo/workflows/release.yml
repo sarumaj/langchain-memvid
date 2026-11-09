@@ -81,6 +81,7 @@ jobs:
       shell: bash
       run: |
         mkdir -p .forgejo-release
+        cp dist/* .forgejo-release/
     - name: Write the release notes
       id: release_notes
       shell: bash
