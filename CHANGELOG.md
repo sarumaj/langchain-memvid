@@ -6,6 +6,8 @@ Unreleased section.
 
 ## Unreleased
 
+## 0.1.12 - 2026-11-16
+
 ### Fixed
 
 - 0.1.11 was tagged but not published: its logging tests failed under pytest 9.1, which
