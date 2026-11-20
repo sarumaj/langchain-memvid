@@ -49,12 +49,12 @@ The test suite covers:
 
 ## Continuous Integration
 
-The project includes GitHub Actions workflows that run:
-
-- Unit tests on multiple Python versions
-- Code coverage reporting
-- Linting and code quality checks
-- Release automation
+Forgejo Actions runs `.forgejo/workflows/test.yml` on every pull request and
+every push to `main` and `renovate/all-patch`: the tests on Python 3.15, with
+ffmpeg. Their results go to a pull request as a comment (`dawid/ci-actions`'
+test-report), with each failure's message. `.forgejo/workflows/release.yml`
+publishes the releases; the documentation site is built on GitHub
+(`.github/workflows/gh-pages.yml`).
 
 ## Performance Benchmarks
 
