@@ -36,5 +36,14 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
+    # As JUnit too, for the report below.
     - name: Run tests
-      run: pytest
+      id: tests
+      run: pytest --junitxml=/tmp/pytest.xml
+    # The results as one comment on the pull request (dawid/ci-actions), also when
+    # tests failed.
+    - name: Test report
+      if: always() && steps.tests.outcome != 'skipped'
+      uses: https://git.ciepiela.org/dawid/ci-actions/test-report@main
+      with:
+        junit: /tmp/pytest.xml
