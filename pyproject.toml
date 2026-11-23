@@ -19,7 +19,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 dependencies = [
-    "faiss-cpu==1.15.1",
+    "faiss-cpu==1.16.0",
     "langchain-core==1.6.13",
     "nest_asyncio==1.6.0",
     "qrcode[pil]==8.2",
@@ -31,14 +31,14 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest==9.1.1",
-    "pytest-asyncio==1.4.1.post1",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
     "pytest-benchmark==5.3.1"
 ]
 docs = [
     "sphinx<9.0.0", # compatible with myst-parser 4.0.1
     "sphinx-rtd-theme==3.1.0",
-    "sphinx-autodoc-typehints<3.13.11", # compatible with Sphinx <9
+    "sphinx-autodoc-typehints<3.17.7", # compatible with Sphinx <9
     "myst-parser==4.0.1",
     "tomli==2.5.0"
 ]
