@@ -6,6 +6,12 @@ Unreleased section.
 
 ## Unreleased
 
+## 0.1.13 - 2026-11-23
+
+### Dependencies
+
+- update dependency pydantic to v2.14.4
+
 ## 0.1.12 - 2026-11-16
 
 ### Fixed
@@ -23,4 +29,3 @@ Unreleased section.
 - update all patch dependencies
 - update dependency langchain-core to v1.6.13
 - update dependency sphinx-autodoc-typehints to <3.13.11
-
